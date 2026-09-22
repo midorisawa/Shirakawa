@@ -331,6 +331,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'get-cache-size') { getCacheSize().then(sendResponse).catch(() => sendResponse({ unavailable: true })); return true; }
   if (message.type === 'clear-cache') { clearDecisionCache().then(sendResponse).catch(() => sendResponse({ ok: false })); return true; }
   if (message.type === 'reset-usage') { resetUsage().then(sendResponse); return true; }
+  if (message.type === 'reset-total-usage') { resetTotalUsage().then(sendResponse); return true; }
   if (message.type !== 'classify') return;
   if (!isXSender(sender)) { sendResponse({ error: true, reason: 'forbidden-sender' }); return false; }
   classify(message.text, message.priority, message.timing).then(result => { sendResponse(result); void scheduleActionIcon(); }).catch(async error => { actionError = true; await scheduleActionIcon(); sendResponse({ error: true, reason: error.reason || 'request-error', status: Number.isInteger(error.status) ? error.status : undefined }); });
@@ -576,6 +577,13 @@ function resetUsage() {
   usageQueue = usageQueue.then(async () => {
     const current = await getUsage();
     await chrome.storage.local.set({ tokenUsage: { inputTokens: current.inputTokens, unreportedRequests: current.unreportedRequests, periods: Object.fromEntries(Object.keys(USAGE_PERIODS).map(period => [period, { startedAt: Date.now(), inputTokens: 0, unreportedRequests: 0 }])) } });
+  });
+  return usageQueue.then(async () => { await notifyConfig(); return getUsage(); });
+}
+function resetTotalUsage() {
+  usageQueue = usageQueue.then(async () => {
+    const stored = (await chrome.storage.local.get('tokenUsage')).tokenUsage || {};
+    await chrome.storage.local.set({ tokenUsage: { ...stored, inputTokens: 0, unreportedRequests: 0 } });
   });
   return usageQueue.then(async () => { await notifyConfig(); return getUsage(); });
 }

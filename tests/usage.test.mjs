@@ -31,15 +31,19 @@ test('実要求だけusageを加算し、キャッシュとリセットを分離
     await ask('same');
     assert.equal(calls, 1);
     assert.equal((await message('get-usage')).inputTokens, 20);
+    await message('reset-total-usage');
+    assert.equal((await message('get-usage')).inputTokens, 0);
+    assert.equal((await message('get-usage')).unreportedRequests, 0);
+    assert.equal((await message('get-usage')).periods['5h'].inputTokens, 10);
     await message('reset-usage');
-    assert.equal((await message('get-usage')).inputTokens, 20);
-    assert.equal((await message('get-usage')).unreportedRequests, 1);
+    assert.equal((await message('get-usage')).inputTokens, 0);
+    assert.equal((await message('get-usage')).unreportedRequests, 0);
     await ask('different');
-    assert.equal((await message('get-usage')).inputTokens, 25);
+    assert.equal((await message('get-usage')).inputTokens, 5);
     await ask('missing');
     const missing = await message('get-usage');
-    assert.equal(missing.inputTokens, 25);
-    assert.equal(missing.unreportedRequests, 2);
+    assert.equal(missing.inputTokens, 5);
+    assert.equal(missing.unreportedRequests, 1);
   } finally {
     if (originalChrome === undefined) delete globalThis.chrome; else globalThis.chrome = originalChrome;
     globalThis.fetch = originalFetch;

@@ -9,7 +9,7 @@ const ruleEditMode = { black: false, white: false };
 const ruleEditSnapshots = { black: null, white: null };
 const ruleEditPendingSnapshots = { black: false, white: false };
 let activeDrag = null;
-const pendingActions = { cache: false, usage: false, blackReset: false, whiteReset: false, priceReset: false, apiKeyDelete: new Set() };
+const pendingActions = { cache: false, usage: false, totalUsage: false, blackReset: false, whiteReset: false, priceReset: false, apiKeyDelete: new Set() };
 const scheduleFrame = callback => (window.requestAnimationFrame ? window.requestAnimationFrame(callback) : window.setTimeout(callback, 16));
 const cancelFrame = id => (window.cancelAnimationFrame ? window.cancelAnimationFrame(id) : window.clearTimeout(id));
 const $ = id => document.getElementById(id);
@@ -39,7 +39,7 @@ function animateToggle(input) {
 const buttonIcons = { edit:'ic_fluent_edit_24_regular.svg', discard:'ic_fluent_arrow_reset_24_regular.svg', reset:'ic_fluent_arrow_reset_24_regular.svg', trash:'ic_fluent_delete_24_regular.svg', dismiss:'ic_fluent_game_controller_button_x_20_regular.svg', save:'ic_fluent_save_24_regular.svg', plus:'M12 5v14m-7-7h14', check:'m5 12 4 4L19 6', download:'M12 4v11m0 0 4-4m-4 4-4-4M5 20h14', upload:'M12 16V5m0 0 4 4m-4-4-4 4M5 20h14' };
 function buttonIconKey(button) {
   if (button.dataset.editGroup) return button.getAttribute('aria-pressed') === 'true' ? 'discard' : 'edit';
-  if (button.dataset.resetGroup || ['resetInputPrice', 'resetUsage'].includes(button.id)) return 'reset';
+  if (button.dataset.resetGroup || ['resetInputPrice', 'resetUsage', 'resetTotalUsage'].includes(button.id)) return 'reset';
   if (button.dataset.remove || button.dataset.removeLimit) return 'dismiss';
   if (button.dataset.addGroup || button.id === 'addUsageLimit') return 'plus';
   if (['save', 'saveApiKey'].includes(button.id)) return 'save';
@@ -91,7 +91,7 @@ function updateDirtyState() {
     return JSON.stringify(['provider', 'model', 'inputPricePerMillion', 'billingCurrency', 'usageLimits', 'decisionCacheLimitMb', 'blackRules', 'whiteRules'].map(key => normalized[key]));
   };
   const invalid = [...document.querySelectorAll('input[type="number"]')].some(input => !input.checkValidity()) || [...document.querySelectorAll('[data-field="condition"]')].some(input => !input.value.trim());
-  const dirty = invalid || comparable(config) !== comparable(appliedConfig) || pendingActions.cache || pendingActions.usage || pendingActions.blackReset || pendingActions.whiteReset || pendingActions.priceReset || pendingActions.apiKeyDelete.size > 0;
+  const dirty = invalid || comparable(config) !== comparable(appliedConfig) || pendingActions.cache || pendingActions.usage || pendingActions.totalUsage || pendingActions.blackReset || pendingActions.whiteReset || pendingActions.priceReset || pendingActions.apiKeyDelete.size > 0;
   if ($('saveState')) $('saveState').textContent = dirty ? '未保存の変更があります' : '';
   $('save').disabled = saving || !dirty;
   if ($('closeWithoutSaving')) $('closeWithoutSaving').disabled = saving || !dirty;
@@ -144,6 +144,7 @@ function pendingActionLabels() {
   const labels = [];
   if (pendingActions.cache) labels.push('キャッシュの消去');
   if (pendingActions.usage) labels.push('各期間の使用量のリセット');
+  if (pendingActions.totalUsage) labels.push('累計使用量のリセット');
   if (pendingActions.blackReset) labels.push('ブラックリストの初期化\n現在の設定（条件、スコア、有効/無効、表示順）はすべて消去され、初期状態に戻ります。');
   if (pendingActions.whiteReset) labels.push('ホワイトリストの初期化\n現在の設定（条件、スコア、有効/無効、表示順）はすべて消去され、初期状態に戻ります。');
   if (pendingActions.priceReset) labels.push('単価・通貨・上限の初期化\n現在の単価・通貨、および上限（期間・金額）の設定が消去され、初期状態に戻ります。');
@@ -165,6 +166,7 @@ async function executePendingActions(snapshot) {
   };
   await run('cache', { type: 'clear-cache' }, 'キャッシュ削除');
   await run('usage', { type: 'reset-usage' }, '使用量リセット');
+  await run('totalUsage', { type: 'reset-total-usage' }, '累計使用量リセット');
   for (const provider of snapshot.apiKeyDelete) {
     try {
       const result = await chrome.runtime.sendMessage({ type: 'delete-api-key', provider });
@@ -685,6 +687,7 @@ async function refreshCacheUsage() {
 }
 if ($('clearCache')) $('clearCache').onclick = () => { if (saving) return; pendingActions.cache = true; markDirty(); status('キャッシュ削除を保存時に実行します'); };
 if ($('resetUsage')) $('resetUsage').onclick = () => { if (saving) return; pendingActions.usage = true; markDirty(); status('使用量リセットを保存時に実行します'); };
+if ($('resetTotalUsage')) $('resetTotalUsage').onclick = () => { if (saving) return; pendingActions.totalUsage = true; markDirty(); status('累計使用量リセットを保存時に実行します'); };
 chrome.runtime.sendMessage({ type: 'get-config' }).then(result => { config = normalizeConfig(result || {}); appliedConfig = structuredClone(config); config.keyConfigured = Boolean(result?.keyConfigured); config.keyConfiguredByProvider = result?.keyConfiguredByProvider || { [config.provider]: config.keyConfigured }; verifiedConnection = null; verificationResult = config.keyConfigured ? { reason: 'unchecked' } : { reason: 'missing-key' }; render(); }).catch(() => { config = normalizeConfig(); appliedConfig = structuredClone(config); render(); });
 chrome.storage.onChanged?.addListener?.((changes, area) => { if (area === 'local' && changes.tokenUsage) refreshUsage(); });
 if (document.querySelector('[role="tabpanel"]')) {
