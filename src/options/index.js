@@ -15,6 +15,22 @@ const cancelFrame = id => (window.cancelAnimationFrame ? window.cancelAnimationF
 const $ = id => document.getElementById(id);
 const status = message => { $('status').textContent = message; $('status').dataset.error = /できません|失敗|保存されていません/.test(message); };
 const keyStatus = message => { $('keyStatus').textContent = message; };
+let confirmationPending = false;
+function confirmInPage(message, actionLabel = '続ける') {
+  if (confirmationPending) return Promise.resolve(false);
+  confirmationPending = true;
+  const dialog = $('confirmDialog');
+  $('confirmMessage').textContent = message;
+  $('confirmAction').textContent = actionLabel;
+  return new Promise(resolve => {
+    dialog.returnValue = '';
+    dialog.addEventListener('close', () => {
+      confirmationPending = false;
+      resolve(dialog.returnValue === 'confirm');
+    }, { once: true });
+    dialog.showModal();
+  });
+}
 const toggleMotionTimers = new WeakMap();
 let activePanelId = document.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute('aria-controls') ?? null;
 function clearToggleMotion(input) {
@@ -298,13 +314,13 @@ function readNormalConfig() {
 }
 async function saveConfig() {
   const button = $('save');
-  if (button.disabled) return;
+  if (button.disabled || confirmationPending) return;
   const emptyCondition = [...document.querySelectorAll('[data-field="condition"]')].find(input => !input.value.trim());
   if (emptyCondition) { status('空の条件は保存できません。入力するか削除してください'); revealField(emptyCondition); return; }
   const invalid = [...document.querySelectorAll('input[type="number"]')].find(input => !input.checkValidity());
   if (invalid) { status('入力値を確認してください。変更は保存されていません'); revealField(invalid); invalid.reportValidity(); return; }
   const pending = pendingActionLabels();
-  if (pending.length && !window.confirm(`保存すると、以下の操作が実行されます。\n\n${pending.join('\n\n')}\n\n※これらの操作は元に戻せません。実行しますか？`)) {
+  if (pending.length && !await confirmInPage(`保存すると、以下の操作が実行されます。\n\n${pending.join('\n\n')}\n\n※これらの操作は元に戻せません。実行しますか？`, '実行する')) {
     status('操作を実行せず、変更を保持しました');
     return;
   }
@@ -569,7 +585,7 @@ $('confirmUsageLimit')?.addEventListener('click', () => { read(); const period =
 $('usageLimitInputs')?.addEventListener('change', event => { const input = event.target; if (!input.matches('[data-limit-period]')) return; if (config.billingCurrency === 'USD' && input.value !== '' && input.checkValidity()) input.value = Number(input.value).toFixed(2); markDirty(); });
 $('usageLimitInputs')?.addEventListener('click', event => { const period = event.target.closest('[data-remove-limit]')?.dataset.removeLimit; if (!period) return; read(); delete config.usageLimits[period]; render(); markDirty(); });
 $('export').onclick = async () => { read(); const blob = new Blob([exportConfig(config)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'jev-filter-rules.json'; link.click(); URL.revokeObjectURL(url); };
-$('import').onchange = async event => { const file = event.target.files[0]; if (!file) return; try { read(); const imported = importConfig(await file.text(), config); if (!window.confirm('ファイルに含まれるリストで現在の条件を置き換えます。続けますか？')) return; config = { ...config, ...imported }; render(); markDirty(); } catch (error) { status(error.message); } finally { event.target.value = ''; } };
+$('import').onchange = async event => { const file = event.target.files[0]; if (!file) return; try { read(); const imported = importConfig(await file.text(), config); if (!await confirmInPage('ファイルに含まれるリストで現在の条件を置き換えます。続けますか？', '読み込む')) return; config = { ...config, ...imported }; render(); markDirty(); } catch (error) { status(error.message); } finally { event.target.value = ''; } };
 for (const id of ['model', 'inputPricePerMillion', 'decisionCacheLimitMb']) {
   $(id)?.addEventListener('change', () => { markDirty(); });
 }

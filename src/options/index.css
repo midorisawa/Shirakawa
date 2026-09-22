@@ -38,6 +38,10 @@ p { margin: 0 0 16px; line-height: 1.65; }
 #save { min-width: 104px; flex-shrink: 0; }
 #status { font-weight: 600; color: #137333; }
 #status[data-error="true"] { color: #c5221f; }
+dialog { width: min(520px, calc(100vw - 48px)); padding: 24px; border: 1px solid var(--border); border-radius: 8px; color: inherit; box-shadow: 0 8px 32px #20212440; }
+dialog::backdrop { background: #20212466; }
+dialog p { white-space: pre-line; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 12px; }
 
 .setting-section { margin: 24px; }
 .connection-group { margin-bottom: 24px; }

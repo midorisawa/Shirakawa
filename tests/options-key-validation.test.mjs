@@ -4,12 +4,24 @@ import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import { DEFAULT_CONFIG } from '../src/core/config.js';
 
+function mockDialog(dom, decide = () => true) {
+  dom.window.HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+    queueMicrotask(() => {
+      const result = decide(this.querySelector('#confirmMessage')?.textContent ?? '');
+      if (result !== 'escape') this.returnValue = result ? 'confirm' : 'cancel';
+      this.open = false;
+      this.dispatchEvent(new dom.window.Event('close'));
+    });
+  };
+}
+
 test('編集とリスト操作は保存ボタンまで反映せず、保存時にAPIキー確認を再送しない', async () => {
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const originalChrome = globalThis.chrome;
   const dom = new JSDOM(readFileSync(new URL('../src/options/index.html', import.meta.url), 'utf8'));
-  dom.window.confirm = () => true;
+  mockDialog(dom);
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   let storageSets = 0;
@@ -25,6 +37,7 @@ test('編集とリスト操作は保存ボタンまで反映せず、保存時�
   try {
     await import(`../src/options/index.js?stale=${Date.now()}`);
     await new Promise(resolve => setTimeout(resolve, 0));
+    assert.ok(document.querySelector('#confirmDialog button[autofocus]'));
     assert.equal(document.getElementById('panel-usage').hidden, false);
     assert.equal(document.querySelector('.save-links a[href="https://forms.gle/4CB9upXFC3STrus16"]')?.textContent, '報告・要望');
     assert.equal(document.getElementById('closeWithoutSaving').querySelector('.button-icon'), null);
@@ -209,7 +222,7 @@ test('削除・リセット操作は保存時まで送信せず、確認キャ�
   let cacheFailures = 1;
   let confirmMessage = '';
   const messages = [];
-  dom.window.confirm = message => { confirmMessage = message; return confirmResult; };
+  mockDialog(dom, message => { confirmMessage = message; return confirmResult; });
   globalThis.chrome = {
     storage: {},
     runtime: { sendMessage: async message => {
@@ -278,12 +291,40 @@ test('削除・リセット操作は保存時まで送信せず、確認キャ�
   }
 });
 
+test('確認後に再表示してEscapeで閉じると承認状態を引き継がない', async () => {
+  const previous = { document: globalThis.document, window: globalThis.window, chrome: globalThis.chrome };
+  const dom = new JSDOM(readFileSync(new URL('../src/options/index.html', import.meta.url), 'utf8'));
+  mockDialog(dom, (() => { const results = ['confirm', 'escape']; return () => results.shift(); })());
+  globalThis.document = dom.window.document;
+  globalThis.window = dom.window;
+  let saves = 0;
+  globalThis.chrome = { storage: {}, runtime: { sendMessage: async message => { if (message.type === 'get-config') return { ...DEFAULT_CONFIG, keyConfigured: true }; if (message.type === 'save-config') saves++; return { ok: true }; } } };
+  try {
+    await import(`../src/options/index.js?dialog-repeat=${Date.now()}`);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    document.getElementById('resetInputPrice').click();
+    document.getElementById('save').click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(saves, 1);
+    document.getElementById('resetInputPrice').click();
+    document.getElementById('save').click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(saves, 1);
+    assert.match(document.getElementById('status').textContent, /実行せず/);
+  } finally {
+    dom.window.close();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+  }
+});
+
 test('保存した単価で使用額を再計算し、編集中は保存済み設定で表示する', async () => {
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const originalChrome = globalThis.chrome;
   const dom = new JSDOM(readFileSync(new URL('../src/options/index.html', import.meta.url), 'utf8'));
-  dom.window.confirm = () => true;
+  mockDialog(dom);
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   const config = { ...DEFAULT_CONFIG, inputPricePerMillion: 2, billingCurrency: 'USD', usageLimits: { '5h': 2, '1d': null, '7d': null, '30d': null } };
