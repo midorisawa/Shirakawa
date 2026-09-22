@@ -20,7 +20,7 @@ html { width: 800px; height: 600px; overflow: hidden; }
 /* 実ポップアップの幅800pxを要求し、自動サイズ計算で横方向に超過させない */
 body { width: 100%; height: 100%; margin: 0; background: #fff; overflow-x: auto; overflow-y: scroll; scroll-padding-bottom: calc(var(--save-bar-height) + 24px); }
 .page-shell { width: 100%; padding: 24px 24px var(--save-bar-height); }
-body:has(#enabled:not(:checked)) :is(.page-shell, .save-bar) { filter: grayscale(1); }
+body:has(#enabled:not(:checked)) :is(#panel-usage, #panel-rules) { filter: grayscale(1); }
 .app-title { display: flex; align-items: center; gap: 12px; }
 .app-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 .app-title img { display: block; width: 168px; height: auto; flex: 0 0 auto; }
