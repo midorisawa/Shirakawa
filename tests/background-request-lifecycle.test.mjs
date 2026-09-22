@@ -17,7 +17,7 @@ async function load(config, fetchImpl) {
   };
   globalThis.fetch = fetchImpl;
   await import(`../src/background.js?lifecycle=${Date.now()}-${Math.random()}`);
-  const call = text => new Promise(resolve => listener({ type: 'classify', text }, { url: 'https://x.com/home' }, resolve));
+  const call = text => new Promise(resolve => listener({ type: 'classify', text, postId: text }, { url: 'https://x.com/home' }, resolve));
   const clear = () => new Promise(resolve => listener({ type: 'clear-cache' }, {}, resolve));
   const setKey = apiKey => new Promise(resolve => listener({ type: 'set-api-key', provider: config.provider, apiKey }, { url: 'chrome-extension://test/options/index.html' }, resolve));
   return { call, clear, setKey, changed, state };

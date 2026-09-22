@@ -126,23 +126,28 @@ function questionRules(config) {
   }
   return [...unique.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
-function cacheKey(text, config) {
+function cacheKey(postId, config) {
   const questions = Object.fromEntries(questionRules(config).map(rule => [rule.id, { type: 'noul', instructions: `この投稿は、次の条件に該当しますか？\n条件：${rule.condition}` }]));
-  return JSON.stringify({ text, provider: config.provider, model: config.model, questions });
+  return JSON.stringify({ postId, provider: config.provider, model: config.model, questions });
 }
 function cacheSize(key, result, createdAt, lastUsedAt) { return new TextEncoder().encode(JSON.stringify({ key, result, createdAt, lastUsedAt })).byteLength; }
 function openCache() {
   if (cacheDbPromise || typeof indexedDB === 'undefined') return cacheDbPromise;
   cacheDbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(CACHE_DB, 3);
+    const request = indexedDB.open(CACHE_DB, 4);
     request.onupgradeneeded = event => {
       const db = request.result;
       let store;
       try { store = request.transaction.objectStore(CACHE_STORE); } catch { store = db.createObjectStore(CACHE_STORE, { keyPath: 'key' }); }
       let metaStore;
       try { metaStore = request.transaction.objectStore(CACHE_META_STORE); } catch { metaStore = db.createObjectStore(CACHE_META_STORE, { keyPath: 'key' }); }
+      if (event.oldVersion < 4) {
+        store.clear();
+        metaStore.clear();
+        if (store.indexNames?.contains?.('lookup')) store.deleteIndex('lookup');
+      }
       if (store?.createIndex && !store.indexNames?.contains?.('lastUsedAt')) store.createIndex('lastUsedAt', 'lastUsedAt', { unique: false });
-      if (store?.createIndex && !store.indexNames?.contains?.('lookup')) store.createIndex('lookup', ['text', 'provider', 'model'], { unique: false });
+      if (store?.createIndex && !store.indexNames?.contains?.('lookup')) store.createIndex('lookup', ['postId', 'provider', 'model'], { unique: false });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -208,12 +213,12 @@ async function getCached(key, limit, generation = cacheGeneration) {
       return undefined;
     }
     if (generation !== cacheGeneration) return undefined;
-    await transactionStores(db, 'readwrite', (store, meta) => { store.put({ ...record, lastUsedAt: now }); meta.put({ key, createdAt: record.createdAt, lastUsedAt: now, size: record.size, text: record.text, provider: record.provider, model: record.model }); });
+    await transactionStores(db, 'readwrite', (store, meta) => { store.put({ ...record, lastUsedAt: now }); meta.put({ key, createdAt: record.createdAt, lastUsedAt: now, size: record.size, postId: record.postId, provider: record.provider, model: record.model }); });
     resultCache.set(key, { result: record.result, createdAt: record.createdAt, lastUsedAt: now, size: record.size });
     return { ...record.result, _jevCacheExpiresAt: record.createdAt + CACHE_TTL };
   } catch { return undefined; }
 }
-async function findCompatibleCached(text, config, questions, limit, generation = cacheGeneration) {
+async function findCompatibleCached(postId, config, questions, limit, generation = cacheGeneration) {
   const db = await openCache();
   try {
     const records = [...resultCache].map(([key, value]) => ({ key, result: value.result, createdAt: value.createdAt, lastUsedAt: value.lastUsedAt, size: value.size }));
@@ -221,7 +226,7 @@ async function findCompatibleCached(text, config, questions, limit, generation =
       const store = db.transaction(CACHE_STORE).objectStore(CACHE_STORE);
       const candidates = [];
       const index = store.index?.('lookup');
-      const range = globalThis.IDBKeyRange?.only?.([text, config.provider, config.model]);
+      const range = globalThis.IDBKeyRange?.only?.([postId, config.provider, config.model]);
       await new Promise((resolve, reject) => {
         const request = index?.openCursor(range) || store.openCursor();
         request.onerror = () => reject(request.error);
@@ -229,7 +234,7 @@ async function findCompatibleCached(text, config, questions, limit, generation =
           const cursor = request.result;
           if (!cursor) { resolve(); return; }
           const value = cursor.value;
-          if (value?.key !== CACHE_META_KEY && value.text === text && value.provider === config.provider && value.model === config.model) candidates.push(value);
+          if (value?.key !== CACHE_META_KEY && value.postId === postId && value.provider === config.provider && value.model === config.model) candidates.push(value);
           cursor.continue();
         };
       });
@@ -243,7 +248,7 @@ async function findCompatibleCached(text, config, questions, limit, generation =
     for (const record of records) {
       let parsed;
       try { parsed = JSON.parse(record.key); } catch { continue; }
-      if (parsed.text !== text || parsed.provider !== config.provider || parsed.model !== config.model) continue;
+      if (parsed.postId !== postId || parsed.provider !== config.provider || parsed.model !== config.model) continue;
       if (record.createdAt + CACHE_TTL <= Date.now()) continue;
       const available = Object.keys(parsed.questions || {});
       const relevant = available.filter(id => wanted.has(id));
@@ -258,7 +263,7 @@ async function findCompatibleCached(text, config, questions, limit, generation =
     if (!missing.length) {
       if (!validAnswers(merged, questions, config)) return undefined;
       const result = { answers: merged };
-      const createdAt = await putCached(cacheKey(text, config), result, limit, generation, oldestCreatedAt);
+      const createdAt = await putCached(cacheKey(postId, config), result, limit, generation, oldestCreatedAt);
       return generation === cacheGeneration ? { ...result, _jevCacheExpiresAt: createdAt + CACHE_TTL } : undefined;
     }
     if (!Object.values(merged).every(answer => validAnswer(answer))) return undefined;
@@ -273,12 +278,13 @@ async function touchPersistent(key, now, limit, generation = cacheGeneration) {
     if (generation !== cacheGeneration) return;
     if (!record || record.createdAt + CACHE_TTL <= now) return;
     if (generation !== cacheGeneration) return;
-    await transactionStores(db, 'readwrite', (store, meta) => { store.put({ ...record, lastUsedAt: now }); meta.put({ key, createdAt: record.createdAt, lastUsedAt: now, size: record.size, text: record.text, provider: record.provider, model: record.model }); });
+    await transactionStores(db, 'readwrite', (store, meta) => { store.put({ ...record, lastUsedAt: now }); meta.put({ key, createdAt: record.createdAt, lastUsedAt: now, size: record.size, postId: record.postId, provider: record.provider, model: record.model }); });
   } catch { /* IndexedDBが利用できない環境ではメモリcacheを使う */ }
 }
-async function touchCache(text) {
+async function touchCache(postId) {
+  if (!postId) return;
   const config = await getConfig();
-  await touchPersistent(cacheKey(text, config), Date.now(), config.decisionCacheLimitMb * 1024 * 1024);
+  await touchPersistent(cacheKey(postId, config), Date.now(), config.decisionCacheLimitMb * 1024 * 1024);
 }
 async function putCached(key, result, limit, generation = cacheGeneration, createdAt = Date.now()) {
   if (generation !== cacheGeneration) return 0;
@@ -287,7 +293,7 @@ async function putCached(key, result, limit, generation = cacheGeneration, creat
   let identity = {};
   try {
     const parsed = JSON.parse(key);
-    identity = { text: parsed.text, provider: parsed.provider, model: parsed.model };
+    identity = { postId: parsed.postId, provider: parsed.provider, model: parsed.model };
   } catch { /* 不正なキーは検索用属性なしで保存 */ }
   const memory = { result, createdAt: now, lastUsedAt: now, size };
   resultCache.set(key, memory);
@@ -322,7 +328,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === 'set-api-key') { setApiKey(message.provider, message.apiKey).then(sendResponse).catch(() => sendResponse({ ok: false, reason: 'storage-error' })); return true; }
   if (message.type === 'delete-api-key') { deleteApiKey(message.provider).then(sendResponse).catch(() => sendResponse({ ok: false, reason: 'storage-error' })); return true; }
-  if (message.type === 'touch-cache') { touchCache(message.text).then(() => sendResponse({ ok: true })); return true; }
+  if (message.type === 'touch-cache') { touchCache(message.postId).then(() => sendResponse({ ok: true })); return true; }
   if (message.type === 'verify-api-key') {
     verifyApiKey(message.provider, message.apiKey).then(sendResponse).catch(error => sendResponse({ ok: false, reason: error.reason || 'network-error' }));
     return true;
@@ -333,7 +339,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'reset-usage') { resetUsage().then(sendResponse); return true; }
   if (message.type !== 'classify') return;
   if (!isXSender(sender)) { sendResponse({ error: true, reason: 'forbidden-sender' }); return false; }
-  classify(message.text, message.priority, message.timing).then(result => { sendResponse(result); void scheduleActionIcon(); }).catch(async error => { actionError = true; await scheduleActionIcon(); sendResponse({ error: true, reason: error.reason || 'request-error', status: Number.isInteger(error.status) ? error.status : undefined }); });
+  classify(message.text, message.postId, message.priority, message.timing).then(result => { sendResponse(result); void scheduleActionIcon(); }).catch(async error => { actionError = true; await scheduleActionIcon(); sendResponse({ error: true, reason: error.reason || 'request-error', status: Number.isInteger(error.status) ? error.status : undefined }); });
   return true;
 });
 chrome.storage.onChanged?.addListener?.(changes => {
@@ -437,7 +443,7 @@ async function deleteApiKey(provider) {
   return { ok: true };
 }
 
-async function classify(text, priority = 1, requestTiming) {
+async function classify(text, postId, priority = 1, requestTiming) {
   const startedAt = performance.now();
   const config = await getConfig();
   if (!config.enabled) return { unknown: true, reason: 'disabled' };
@@ -448,18 +454,17 @@ async function classify(text, priority = 1, requestTiming) {
   if (!apiKey) return { unknown: true, reason: 'missing-key' };
   if (requestedKeyGeneration !== keyGeneration || requestedConfigGeneration !== configGeneration || generation !== cacheGeneration) return { unknown: true, reason: 'stale-request' };
   const questions = Object.fromEntries(questionRules(config).map(rule => [rule.id, { type: 'noul', instructions: `この投稿は、次の条件に該当しますか？\n条件：${rule.condition}` }]));
-  const key = JSON.stringify({ text, provider: config.provider, model: config.model, questions });
+  const key = postId ? cacheKey(postId, config) : null;
   const requestGeneration = `${generation}:${requestedKeyGeneration}:${requestedConfigGeneration}`;
-  if (inFlightGenerations.get(key) === requestGeneration && inFlight.has(key)) return inFlight.get(key);
+  if (key && inFlightGenerations.get(key) === requestGeneration && inFlight.has(key)) return inFlight.get(key);
   let resolveTask;
   let rejectTask;
   const task = new Promise((resolve, reject) => { resolveTask = resolve; rejectTask = reject; });
-  inFlight.set(key, task);
-  inFlightGenerations.set(key, requestGeneration);
+  if (key) { inFlight.set(key, task); inFlightGenerations.set(key, requestGeneration); }
   (async () => {
-    const cached = await getCached(key, config.decisionCacheLimitMb * 1024 * 1024, generation);
+    const cached = key && await getCached(key, config.decisionCacheLimitMb * 1024 * 1024, generation);
     if (cached) return generation === cacheGeneration ? cached : { unknown: true, reason: 'cache-cleared' };
-    const compatible = await findCompatibleCached(text, config, questions, config.decisionCacheLimitMb * 1024 * 1024, generation);
+    const compatible = postId && await findCompatibleCached(postId, config, questions, config.decisionCacheLimitMb * 1024 * 1024, generation);
     if (compatible && !compatible._jevCachePartial) return compatible;
     const requestQuestions = compatible?._jevCachePartial ? Object.fromEntries(compatible._jevMissing.map(id => [id, questions[id]])) : questions;
     const request = enqueueApi(() => classifyUncached(text, config, requestQuestions, requestedKeyGeneration, generation, requestedConfigGeneration, apiKey, startedAt), priority);
@@ -467,7 +472,7 @@ async function classify(text, priority = 1, requestTiming) {
     if (compatible?._jevCachePartial && result?.answers) result.answers = { ...compatible.answers, ...result.answers };
     if (generation !== cacheGeneration) return { unknown: true, reason: 'cache-cleared' };
     const createdAt = result?.answers && validAnswers(result.answers, questions, config) ? (compatible?._jevCacheCreatedAt || Date.now()) : 0;
-    if (createdAt) void putCached(key, result, config.decisionCacheLimitMb * 1024 * 1024, generation, createdAt).catch(() => undefined);
+    if (createdAt && key) void putCached(key, result, config.decisionCacheLimitMb * 1024 * 1024, generation, createdAt).catch(() => undefined);
     if (generation !== cacheGeneration) return { unknown: true, reason: 'cache-cleared' };
     if (globalThis.JEV_DEV_TIMING) console.debug('[jev timing]', { totalMs: Math.round(performance.now() - startedAt), cachePersistScheduled: Boolean(createdAt) });
     const response = result?.answers ? { ...result, _jevCacheExpiresAt: createdAt + CACHE_TTL } : result;
@@ -475,9 +480,9 @@ async function classify(text, priority = 1, requestTiming) {
     return response;
   })().then(resolveTask, rejectTask);
   task.then(result => {
-    if (inFlight.get(key) === task) { inFlight.delete(key); inFlightGenerations.delete(key); }
+    if (key && inFlight.get(key) === task) { inFlight.delete(key); inFlightGenerations.delete(key); }
     if (!result?.answers) return;
-  }, () => { if (inFlight.get(key) === task) { inFlight.delete(key); inFlightGenerations.delete(key); } });
+  }, () => { if (key && inFlight.get(key) === task) { inFlight.delete(key); inFlightGenerations.delete(key); } });
   return task;
 }
 

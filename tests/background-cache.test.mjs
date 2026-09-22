@@ -5,12 +5,12 @@ import { DEFAULT_CONFIG, hashCondition } from '../src/core/config.js';
 
 const DB_NAME = 'jev-decision-cache';
 const openDb = indexedDB => new Promise((resolve, reject) => {
-  const request = indexedDB.open(DB_NAME, 3);
+  const request = indexedDB.open(DB_NAME, 4);
   request.onupgradeneeded = () => {
     const db = request.result;
     const results = db.createObjectStore('results', { keyPath: 'key' });
     results.createIndex('lastUsedAt', 'lastUsedAt');
-    results.createIndex('lookup', ['text', 'provider', 'model']);
+    results.createIndex('lookup', ['postId', 'provider', 'model']);
     db.createObjectStore('metadata', { keyPath: 'key' });
   };
   request.onsuccess = () => resolve(request.result);
@@ -23,6 +23,30 @@ async function createDb(seed = {}) {
     const tx = db.transaction(['results', 'metadata'], 'readwrite');
     for (const value of seed.records || []) tx.objectStore('results').put(value);
     for (const value of seed.metadata || []) tx.objectStore('metadata').put(value);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+  return indexed;
+}
+async function createLegacyDb() {
+  const indexed = new IDBFactory();
+  await new Promise((resolve, reject) => {
+    const request = indexed.open(DB_NAME, 3);
+    request.onupgradeneeded = () => {
+      const results = request.result.createObjectStore('results', { keyPath: 'key' });
+      results.createIndex('lastUsedAt', 'lastUsedAt');
+      results.createIndex('lookup', ['text', 'provider', 'model']);
+      request.result.createObjectStore('metadata', { keyPath: 'key' });
+    };
+    request.onsuccess = () => { request.result.close(); resolve(); };
+    request.onerror = () => reject(request.error);
+  });
+  const db = await new Promise((resolve, reject) => { const request = indexed.open(DB_NAME); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(['results', 'metadata'], 'readwrite');
+    tx.objectStore('results').put({ key: '{"text":"旧本文"}', text: '旧本文', result: { answers: {} }, createdAt: 1, lastUsedAt: 1, size: 100 });
+    tx.objectStore('metadata').put({ key: '{"text":"旧本文"}', text: '旧本文', createdAt: 1, lastUsedAt: 1, size: 100 });
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
   });
@@ -51,7 +75,7 @@ async function load({ config, db, fetchResult }) {
     return fetchResult(options);
   } });
   await import(`../src/background.js?cache-test=${Date.now()}-${Math.random()}`);
-  const call = (text = '同じ本文', priority) => new Promise(resolve => listener({ type: 'classify', text, priority }, { url: 'https://x.com/home' }, resolve));
+  const call = (text = '同じ本文', priority, postId) => new Promise(resolve => listener({ type: 'classify', text, postId: postId === undefined ? text : postId, priority }, { url: 'https://x.com/home' }, resolve));
   const cacheSize = () => new Promise(resolve => listener({ type: 'get-cache-size' }, {}, resolve));
   const clearCache = () => new Promise(resolve => listener({ type: 'clear-cache' }, {}, resolve));
   return { call, cacheSize, clearCache, changed: (value, oldValue = currentConfig) => { currentConfig = value; changed({ config: { oldValue, newValue: value } }); } };
@@ -155,14 +179,41 @@ test('永続cacheの条件追加は既存条件を再送せず、不足条件だ
     assert.deepEqual(requests[0], [ruleA.id]);
     assert.deepEqual(requests[1], [ruleB.id]);
     const records = await readStore(db, 'results');
-    assert.equal(records.find(record => JSON.parse(record.key).questions[ruleA.id])?.createdAt, originalCreatedAt);
-    assert.equal(records.find(record => JSON.parse(record.key).questions[ruleA.id] && JSON.parse(record.key).questions[ruleB.id])?.createdAt, originalCreatedAt);
+    assert.equal(records.find(record => JSON.parse(record.key).postId === '本文' && JSON.parse(record.key).questions[ruleA.id])?.createdAt, originalCreatedAt);
+    assert.equal(records.find(record => JSON.parse(record.key).postId === '本文' && JSON.parse(record.key).questions[ruleA.id] && JSON.parse(record.key).questions[ruleB.id])?.createdAt, originalCreatedAt);
     now += 30 * 24 * 60 * 60 * 1000;
     await new Promise(resolve => setTimeout(resolve, 0));
     await h.call('本文');
     assert.equal(requests.length, 3);
     assert.deepEqual(requests[2], [ruleA.id, ruleB.id]);
   } finally { Date.now = old.now; Object.entries(old).filter(([key]) => key !== 'now').forEach(([key, value]) => { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }); }
+});
+
+test('本文を含む旧形式cacheは移行時に削除する', async () => {
+  const old = { chrome: globalThis.chrome, fetch: globalThis.fetch, indexedDB: globalThis.indexedDB };
+  const db = await createLegacyDb();
+  try {
+    const h = await load({ db, config: { ...DEFAULT_CONFIG }, fetchResult: () => ({ answers: {} }) });
+    assert.deepEqual(await h.cacheSize(), { bytes: 0 });
+  } finally { Object.entries(old).forEach(([key, value]) => { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }); }
+});
+
+test('本文を保存せず、投稿IDがない要求は再利用しない', async () => {
+  const old = { chrome: globalThis.chrome, fetch: globalThis.fetch, indexedDB: globalThis.indexedDB };
+  const db = await createDb();
+  const rule = { ...DEFAULT_CONFIG.blackRules[0], enabled: true };
+  let fetchCount = 0;
+  try {
+    const h = await load({ db, config: { ...DEFAULT_CONFIG, enabled: true, apiKey: 'key', blackRules: [rule] }, fetchResult: () => { fetchCount++; return { answers: { [hashCondition(rule.condition)]: { noul: 0 } } }; } });
+    await h.call('秘匿する本文', undefined, 'post-1');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const [record] = await readStore(db, 'results');
+    assert.equal(JSON.stringify(record).includes('秘匿する本文'), false);
+    assert.equal(JSON.parse(record.key).postId, 'post-1');
+    await h.call('同じ本文', undefined, null);
+    await h.call('同じ本文', undefined, null);
+    assert.equal(fetchCount, 3);
+  } finally { Object.entries(old).forEach(([key, value]) => { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }); }
 });
 
 test('条件削除後は互換cacheの完全回答を再送せず利用する', async () => {
