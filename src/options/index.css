@@ -137,10 +137,10 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 :is(.rule-enabled, .toggle-control) input:checked { background: var(--blue); }
 :is(.rule-enabled, .toggle-control) input:checked::after { transform: translateX(18px); }
 #rules .rule-group > p[data-group] > button:hover { color: #c5221f; background: #fce8e6; }
-#rules .rule-group:not([data-editing="true"]) > p[data-group]:is(:has(input[type="checkbox"]:not(:checked)), [data-enabled="false"]) { background: #f8f9fa; }
-#rules .rule-group:not([data-editing="true"]) > p[data-group]:is(:has(input[type="checkbox"]:not(:checked)), [data-enabled="false"]) :is(label, output, .rule-remove) { color: #80868b; }
-#rules .rule-group:not([data-editing="true"]) > p[data-group]:is(:has(input[type="checkbox"]:not(:checked)), [data-enabled="false"]) textarea { background: #f1f3f4; border-color: #dadce0; color: #80868b; }
-#rules .rule-group:not([data-editing="true"]) > p[data-group]:is(:has(input[type="checkbox"]:not(:checked)), [data-enabled="false"]) input[type="range"] { accent-color: #9aa0a6; opacity: 0.6; }
+#rules .rule-group:not([data-editing="true"]) > p[data-group]:has(input[type="checkbox"]:not(:checked)) { background: #f8f9fa; }
+#rules .rule-group:not([data-editing="true"]) > p[data-group]:has(input[type="checkbox"]:not(:checked)) :is(label, output, .rule-remove) { color: #80868b; }
+#rules .rule-group:not([data-editing="true"]) > p[data-group]:has(input[type="checkbox"]:not(:checked)) textarea { background: #f1f3f4; border-color: #dadce0; color: #80868b; }
+#rules .rule-group:not([data-editing="true"]) > p[data-group]:has(input[type="checkbox"]:not(:checked)) input[type="range"] { accent-color: #9aa0a6; opacity: 0.6; }
 #rules .rule-group > .rule-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 10px; margin: 14px 0 24px; }
 #rules .rule-group > .rule-actions > :first-child { grid-column: 2; justify-self: center; }
 #rules [data-reset-group] { color: var(--muted); }

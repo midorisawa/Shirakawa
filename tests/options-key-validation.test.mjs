@@ -44,7 +44,9 @@ test('編集とリスト操作は保存ボタンまで反映せず、保存時�
     const optionsCss = readFileSync(new URL('../src/options/index.css', import.meta.url), 'utf8');
     assert.match(optionsCss, /\.rule-condition textarea\s*\{[^}]*resize:\s*none/s);
     assert.doesNotMatch(optionsCss, /gap:\s*24px 12px/);
-    assert.match(optionsCss, /\.rule-group:not\(\[data-editing="true"\]\) > p\[data-group\]:is\([\s\S]*?textarea \{ background: #f1f3f4/);
+    assert.match(optionsCss, /\.rule-group:not\(\[data-editing="true"\]\) > p\[data-group\]:has\(input\[type="checkbox"\]:not\(:checked\)\)[\s\S]*?textarea \{ background: #f1f3f4/);
+    assert.doesNotMatch(optionsCss, /\[data-enabled="false"\]/);
+    assert.equal(document.querySelector('[data-group="black"]').dataset.enabled, String(DEFAULT_CONFIG.blackRules[0].enabled));
     const modelInput = document.getElementById('model');
     const originalModel = modelInput.value;
     assert.equal(document.getElementById('save').disabled, true);
@@ -172,6 +174,8 @@ test('編集とリスト操作は保存ボタンまで反映せず、保存時�
     document.getElementById('save').click();
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(document.querySelector('[data-group="black"] textarea').hidden, true);
+    const initiallyDisabledRule = DEFAULT_CONFIG.blackRules.find(rule => !rule.enabled);
+    assert.equal(savedConfig.blackRules.find(rule => rule.id === initiallyDisabledRule.id).enabled, false);
     document.querySelector('[data-edit-group="black"]').click();
     document.getElementById('model').value = 'custom-model';
     document.getElementById('reset-black').click();
