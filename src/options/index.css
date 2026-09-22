@@ -109,9 +109,10 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 #apiKey { width: 100%; min-width: 0; }
 #rules .rule-heading { position: sticky; top: var(--tabs-height); z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0; padding: 12px 0; border-bottom: 2px solid #e8eaed; background: #fff; }
 #rules .rule-heading h3 { margin: 0; }
+#rules .rule-heading-actions { display: flex; align-items: center; gap: 8px; }
 .rule-group { display: flow-root; }
 #rules .rule-group > p[data-group] { display: grid; grid-template-columns: minmax(0, 1fr) 224px 42px; grid-template-areas: "condition threshold enabled"; align-items: center; gap: 24px; padding: 4px 12px; margin: 0; border-bottom: 1px solid #e8eaed; transition: transform .14s ease; }
-#rules .rule-group[data-editing="true"] > p[data-group] { grid-template-columns: 28px minmax(0, 1fr) 224px 42px 36px; grid-template-areas: "handle condition threshold enabled remove"; gap: 24px; }
+#rules .rule-group[data-editing="true"] > p[data-group] { grid-template-columns: 28px minmax(0, 1fr) 224px 42px 36px; grid-template-areas: "handle condition threshold enabled remove"; gap: 24px 12px; padding-inline: 0; }
 #rules .rule-group > p[data-group].rule-dragging { visibility: hidden; }
 .rule-drag-clone { position: fixed; z-index: 10; display: grid !important; margin: 0 !important; pointer-events: none; opacity: .95; background: #fff; box-shadow: 0 8px 24px #20212433; transition: none !important; }
 :is(#rules, .rule-drag-clone) .rule-remove { grid-area: remove; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 40px; padding: 0; color: var(--muted); border-color: transparent; background: transparent; }
@@ -122,6 +123,8 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 #rules .rule-group > p[data-group].drop-target[data-drop-position="after"] { box-shadow: inset 0 -3px 0 var(--blue); }
 .rule-condition { grid-area: condition; display: grid; gap: 4px; font-size: 13px; line-height: 18px; }
 .rule-condition-text { font-weight: 600; }
+#rules .rule-condition textarea { border: 0; }
+#rules .rule-condition textarea:focus-visible { outline-width: 1px; outline-offset: 1px; }
 .rule-condition textarea { width: 100%; height: 54px; min-height: 54px; padding: 6px 10px; font-size: 14px; line-height: 20px; resize: none; }
 .rule-threshold { grid-area: threshold; display: grid; gap: 0; font-size: 13px; line-height: 18px; }
 .rule-threshold output { margin: 0 2px; font-size: 18px; line-height: 24px; font-variant-numeric: tabular-nums; color: #202124; font-weight: 600; }
@@ -166,7 +169,7 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 .usage-budget[data-state="exhausted"] .budget-state, .usage-budget[data-state="exhausted"] .budget-notice { color: #c5221f; }
 .usage-empty { grid-column: 1 / -1; padding: 18px 20px; border: 1px dashed var(--border); border-radius: 4px; color: var(--muted); font-size: 14px; margin: 0; }
 .save-links { display: flex; align-items: center; gap: 8px; min-width: 0; margin-right: auto; }
-.footer-link { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; color: #202124; font-size: 13px; line-height: 1.4; text-decoration: none; }
+.footer-link { height: 40px; display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; color: #202124; font-size: 13px; line-height: 1.4; text-decoration: none; }
 .footer-link:hover { background: #f8f9fa; border-color: #bdc1c6; }
 .footer-link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .footer-link img { width: 72px; height: auto; flex: 0 0 auto; }
@@ -188,7 +191,7 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 .cache-content input[type="number"] { width: 150px; }
 @media (max-width: 720px) {
   #rules .rule-group > p[data-group] { grid-template-columns: minmax(0, 1fr) 224px 42px; grid-template-areas: "condition threshold enabled"; gap: 24px; }
-  #rules .rule-group[data-editing="true"] > p[data-group] { grid-template-columns: 28px minmax(0, 1fr) 224px; grid-template-areas: "handle condition threshold" "handle enabled remove"; gap: 24px; }
+  #rules .rule-group[data-editing="true"] > p[data-group] { grid-template-columns: 28px minmax(0, 1fr) 224px; grid-template-areas: "handle condition threshold" "handle enabled remove"; gap: 24px 12px; }
   #rules .rule-remove { justify-self: end; }
 }
 @media (max-width: 480px) {

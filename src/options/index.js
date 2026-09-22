@@ -247,6 +247,8 @@ function render() {
     heading.textContent = title;
     const headingBar = document.createElement('div');
     headingBar.className = 'rule-heading';
+    const headingActions = document.createElement('div');
+    headingActions.className = 'rule-heading-actions';
     const reset = document.createElement('button');
     reset.type = 'button'; reset.id = `reset-${group}`; reset.dataset.resetGroup = group; reset.textContent = '初期設定に戻す';
     const editButton = document.createElement('button');
@@ -254,7 +256,8 @@ function render() {
     editButton.textContent = editing ? '編集を破棄する' : '編集する';
     editButton.setAttribute('aria-pressed', String(editing));
     reset.hidden = !editing;
-    headingBar.append(heading, reset, editButton);
+    headingActions.append(reset, editButton);
+    headingBar.append(heading, headingActions);
     const nodes = [headingBar];
     rules.forEach((rule, index) => {
       const row = document.createElement('p');
