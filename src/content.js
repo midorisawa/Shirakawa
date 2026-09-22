@@ -127,14 +127,19 @@ function extractParts(article) {
   }
   return parts;
 }
-function cacheKey(article, text, kind = 'main', root = article) {
-  const postId = kind === 'quote'
-    ? root.querySelector('a[href*="/status/"]')?.href || `quote:${text}`
-    : article.dataset.postId || article.querySelector('a[href*="/status/"]')?.href;
-  if (!postId || !text) return null;
+function postId(article, kind = 'main', root = article) {
+  const candidate = kind === 'main' ? article.dataset.postId : '';
+  if (candidate) return candidate;
+  const links = [...root.querySelectorAll('a[href*="/status/"]')];
+  const href = (kind === 'main' ? links.find(link => !link.closest('[role="link"]')) : links[0])?.href;
+  return href?.match(/\/status\/(\d+)/)?.[1] || null;
+}
+function cacheKey(article, kind = 'main', root = article) {
+  const id = postId(article, kind, root);
+  if (!id) return null;
   const rules = [...new Map(allRules().filter(rule => rule.condition).map(rule => [rule.id, rule.id])).values()].sort();
   const settings = JSON.stringify({ provider: config.provider, model: config.model, rules });
-  return `${kind}|${postId}|${text}|${settings}`;
+  return `${kind}|${id}|${settings}`;
 }
 function rememberResult(key, result, expires = Date.now() + RESULT_CACHE_TTL, persistent = false) {
   resultCache.delete(key);
@@ -144,14 +149,14 @@ function rememberResult(key, result, expires = Date.now() + RESULT_CACHE_TTL, pe
 }
 function syncPart(part) {
   if (runtimeContextInvalidated) return;
-  const key = cacheKey(part.article, part.text, part.kind, part.root);
+  const key = cacheKey(part.article, part.kind, part.root);
   const signature = `${configGeneration}|${part.kind}|${part.article.dataset.postId || ''}|${part.text}|${key || ''}`;
   const cached = key && resultCache.get(key);
   if (cached && cached.expires > Date.now()) {
     if (validAnswers(cached.answers)) {
       partState.set(part.root, { signature });
       applyAnswers(part, key, cached.answers);
-      if (cached.persistent && touchedCache.get(part.root) !== key) { touchedCache.set(part.root, key); sendRuntimeMessage({ type: 'touch-cache', text: part.text }).catch(() => {}); }
+      if (cached.persistent && touchedCache.get(part.root) !== key) { touchedCache.set(part.root, key); sendRuntimeMessage({ type: 'touch-cache', postId: postId(part.article, part.kind, part.root) }).catch(() => {}); }
       return;
     }
   }
@@ -191,8 +196,8 @@ async function processPart(part, signature, detectedAt) {
   requestIdentity.set(root, identity);
   if (kind === 'main') { article.dataset.jevState = 'pending'; delete article.dataset.jevReason; }
   else { root.classList.remove(quoteHiddenClass); clearHeaderLayout(root); getPlaceholders(root).forEach(node => node.remove()); }
-  const postId = article.dataset.postId || article.querySelector('a[href*="/status/"]')?.href || '';
-  const requestKey = cacheKey(article, text, kind, root);
+  const currentPostId = postId(article, kind, root);
+  const requestKey = cacheKey(article, kind, root);
   const generation = pageGeneration;
   if (!text) return handleUnknownPart(part, undefined, 'empty-text');
   const result = document.createElement('div');
@@ -202,14 +207,14 @@ async function processPart(part, signature, detectedAt) {
   let response;
   const sentAt = timingNow();
   try {
-    const message = { type: 'classify', text, priority: articlePriority(article) };
+    const message = { type: 'classify', text, postId: currentPostId, priority: articlePriority(article) };
     if (globalThis.JEV_DEV_TIMING) message.timing = { detectedAt, sentAt };
     response = await sendRuntimeMessage(message);
   }
   catch {
     if (runtimeContextInvalidated) return;
     const respondedAt = timingNow();
-    if (!isCurrentPart(part, identity, text, postId, requestKey, generation)) return;
+    if (!isCurrentPart(part, identity, text, currentPostId, requestKey, generation)) return;
     partState.set(root, { signature, pending: false });
     handleUnknownPart(part, result, 'request-error');
     emitTiming({ detectedAt, sentAt, respondedAt });
@@ -217,7 +222,7 @@ async function processPart(part, signature, detectedAt) {
   }
   if (runtimeContextInvalidated) return;
   const respondedAt = timingNow();
-  if (!isCurrentPart(part, identity, text, postId, requestKey, generation)) {
+  if (!isCurrentPart(part, identity, text, currentPostId, requestKey, generation)) {
     emitTiming({ detectedAt, sentAt, respondedAt });
     if (generation !== pageGeneration) return;
     if (requestIdentity.get(root) === identity) { partState.delete(root); scan(); }
@@ -240,7 +245,7 @@ async function processPart(part, signature, detectedAt) {
     emitTiming({ detectedAt, sentAt, respondedAt });
     return;
   }
-  const key = cacheKey(article, text, kind, root);
+  const key = cacheKey(article, kind, root);
   if (!key) {
     applyAnswers(part, null, answers, result);
     emitTiming({ detectedAt, sentAt, respondedAt });
@@ -262,8 +267,8 @@ function emitTiming(timing) {
   });
 }
 
-function isCurrentPart(part, identity, text, postId, requestKey, generation) {
-  return generation === pageGeneration && requestIdentity.get(part.root) === identity && extractParts(part.article).some(current => current.root === part.root && current.kind === part.kind && current.text === text) && (part.article.dataset.postId || part.article.querySelector('a[href*="/status/"]')?.href || '') === postId && cacheKey(part.article, text, part.kind, part.root) === requestKey;
+function isCurrentPart(part, identity, text, currentPostId, requestKey, generation) {
+  return generation === pageGeneration && requestIdentity.get(part.root) === identity && extractParts(part.article).some(current => current.root === part.root && current.kind === part.kind && current.text === text) && postId(part.article, part.kind, part.root) === currentPostId && cacheKey(part.article, part.kind, part.root) === requestKey;
 }
 function applyAnswers(part, key, answers, pending) {
   if (!validAnswers(answers)) return handleUnknownPart(part, pending, 'invalid-answer');
