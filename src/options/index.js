@@ -263,10 +263,11 @@ function render() {
       const row = document.createElement('p');
       row.dataset.group = group;
       row.dataset.id = rule.id;
+      row.dataset.enabled = String(rule.enabled);
       const thresholdId = `threshold-${group}-${index}`;
       row.innerHTML = `${editing ? `<button class="rule-drag-handle" type="button" aria-label="${escapeHtml(rule.condition || '空の条件')}の順序を変更する">⋮⋮</button>` : ''}<label class="rule-condition"><span class="rule-condition-text"${editing ? ' hidden' : ''}>${escapeHtml(rule.condition)}</span><textarea data-field="condition" aria-label="条件文" rows="2" placeholder="例：攻撃的な表現を含む投稿"${editing ? '' : ' hidden'}>${escapeHtml(rule.condition)}</textarea></label>
         <label class="rule-threshold" for="${thresholdId}"><span class="threshold-summary">スコア<output for="${thresholdId}">${Number(rule.threshold).toFixed(2)}</output>以上の投稿${group === 'black' ? 'を非表示' : 'のみ表示'}</span><input id="${thresholdId}" data-field="threshold" type="range" min="0" max="1" step="any" aria-label="${group === 'black' ? '非表示にする' : '表示する'}最低スコア" value="${rule.threshold}"></label>
-        <label class="rule-enabled"><input data-field="enabled" role="switch" type="checkbox" aria-label="${escapeHtml(rule.condition || '空の条件')}を有効にする" ${rule.enabled ? 'checked' : ''}></label>
+        ${editing ? '' : `<label class="rule-enabled"><input data-field="enabled" role="switch" type="checkbox" aria-label="${escapeHtml(rule.condition || '空の条件')}を有効にする" ${rule.enabled ? 'checked' : ''}></label>`}
         <button class="rule-remove" type="button" data-remove="${index}" aria-label="${escapeHtml(rule.condition || '空の条件')}を削除する" title="${escapeHtml(rule.condition || '空の条件')}を削除する"${editing ? '' : ' hidden'}><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" stroke="currentColor" fill="none" stroke-width="1.5"></circle><path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" fill="none" stroke-width="1.5"></path></svg></button>`;
       nodes.push(row);
     });
@@ -296,7 +297,7 @@ function render() {
 function escapeHtml(value) { return value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char])); }
 function read() {
   const rows = [...$('rules').querySelectorAll('p')];
-  const readRules = group => rows.filter(row => row.dataset.group === group).map(row => ({ id: row.dataset.id, condition: row.querySelector('[data-field="condition"]').value, threshold: Number(row.querySelector('[data-field="threshold"]').value), enabled: row.querySelector('[data-field="enabled"]').checked }));
+  const readRules = group => rows.filter(row => row.dataset.group === group).map(row => ({ id: row.dataset.id, condition: row.querySelector('[data-field="condition"]').value, threshold: Number(row.querySelector('[data-field="threshold"]').value), enabled: row.querySelector('[data-field="enabled"]')?.checked ?? row.dataset.enabled === 'true' }));
   config = {
     ...config,
     enabled: $('enabled').checked,
