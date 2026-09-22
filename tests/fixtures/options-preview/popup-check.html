@@ -43,7 +43,7 @@
         if (message.type === 'get-usage') return usage();
         if (message.type === 'get-cache-size') return { bytes: 1048576 };
         if (message.type === 'save-config') { state.config = { ...state.config, ...clone(message.config) }; return { ok: true, simulated: true }; }
-        if (message.type === 'clear-cache' || message.type === 'reset-usage') return { ok: true, simulated: true };
+        if (message.type === 'clear-cache' || message.type === 'reset-usage' || message.type === 'reset-all-usage') return { ok: true, simulated: true };
         if (['verify-api-key', 'set-api-key', 'delete-api-key'].includes(message.type)) return { ok: false, reason: 'preview-no-api' };
         return { ok: false, reason: 'unsupported-preview-message' };
       }

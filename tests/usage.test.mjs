@@ -9,9 +9,10 @@ test('初期ブラックリストに誇張や論理の飛躍によるこじつ�
   assert.equal(DEFAULT_CONFIG.blackRules[index + 1].threshold, 0.9);
 });
 
-test('実要求だけusageを加算し、キャッシュとリセットを分離する', async () => {
+test('実要求だけusageを加算し、キャッシュと期間別・全使用量リセットを分離する', async () => {
   const originalChrome = globalThis.chrome;
   const originalFetch = globalThis.fetch;
+  const originalDateNow = Date.now;
   let listener;
   let calls = 0;
   const state = {
@@ -31,17 +32,24 @@ test('実要求だけusageを加算し、キャッシュとリセットを分離
     await ask('same');
     assert.equal(calls, 1);
     assert.equal((await message('get-usage')).inputTokens, 20);
+    Date.now = () => 1_000_000;
+    await message('reset-all-usage');
+    const reset = await message('get-usage');
+    assert.equal(reset.inputTokens, 0);
+    assert.equal(reset.unreportedRequests, 0);
+    assert.deepEqual(Object.values(reset.periods), Array.from({ length: 4 }, () => ({ startedAt: 1_000_000, inputTokens: 0, unreportedRequests: 0 })));
     await message('reset-usage');
-    assert.equal((await message('get-usage')).inputTokens, 20);
-    assert.equal((await message('get-usage')).unreportedRequests, 1);
+    assert.equal((await message('get-usage')).inputTokens, 0);
+    assert.equal((await message('get-usage')).unreportedRequests, 0);
     await ask('different');
-    assert.equal((await message('get-usage')).inputTokens, 25);
+    assert.equal((await message('get-usage')).inputTokens, 5);
     await ask('missing');
     const missing = await message('get-usage');
-    assert.equal(missing.inputTokens, 25);
-    assert.equal(missing.unreportedRequests, 2);
+    assert.equal(missing.inputTokens, 5);
+    assert.equal(missing.unreportedRequests, 1);
   } finally {
     if (originalChrome === undefined) delete globalThis.chrome; else globalThis.chrome = originalChrome;
     globalThis.fetch = originalFetch;
+    Date.now = originalDateNow;
   }
 });
