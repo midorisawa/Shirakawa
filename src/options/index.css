@@ -118,7 +118,7 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 #rules .rule-group > p[data-group].drop-target[data-drop-position="after"] { box-shadow: inset 0 -3px 0 var(--blue); }
 .rule-condition { grid-area: condition; display: grid; gap: 4px; font-size: 13px; line-height: 18px; }
 .rule-condition-text { font-weight: 600; }
-.rule-condition textarea { width: 100%; height: 54px; min-height: 54px; padding: 6px 10px; font-size: 14px; line-height: 20px; }
+.rule-condition textarea { width: 100%; height: 54px; min-height: 54px; padding: 6px 10px; font-size: 14px; line-height: 20px; resize: none; }
 .rule-threshold { grid-area: threshold; display: grid; gap: 0; font-size: 13px; line-height: 18px; }
 .rule-threshold output { margin: 0 2px; font-size: 18px; line-height: 24px; font-variant-numeric: tabular-nums; color: #202124; font-weight: 600; }
 .rule-threshold input { width: 100%; height: 30px; margin: 0; padding: 0; accent-color: var(--blue); cursor: pointer; }
@@ -135,8 +135,7 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 #rules .rule-group > p[data-group]:has(input[type="checkbox"]:not(:checked)) textarea { background: #f1f3f4; border-color: #dadce0; color: #80868b; }
 #rules .rule-group > p[data-group]:has(input[type="checkbox"]:not(:checked)) input[type="range"] { accent-color: #9aa0a6; opacity: 0.6; }
 #rules .rule-group > .rule-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 10px; margin: 14px 0 24px; }
-#rules .rule-group > .rule-actions > :first-child { grid-column: 1; justify-self: start; }
-#rules .rule-group > .rule-actions > :last-child { grid-column: 2; justify-self: center; }
+#rules .rule-group > .rule-actions > :first-child { grid-column: 2; justify-self: center; }
 #rules [data-reset-group] { color: var(--muted); }
 .file-control { position: relative; }
 .file-control input { position: absolute; width: 1px; height: 1px; opacity: 0; padding: 0; min-height: 0; }
@@ -162,10 +161,11 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 .usage-budget[data-state="exhausted"] { --meter-color: #c5221f; }
 .usage-budget[data-state="exhausted"] .budget-state, .usage-budget[data-state="exhausted"] .budget-notice { color: #c5221f; }
 .usage-empty { grid-column: 1 / -1; padding: 18px 20px; border: 1px dashed var(--border); border-radius: 4px; color: var(--muted); font-size: 14px; margin: 0; }
-.github-link { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; margin-right: auto; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; color: #202124; font-size: 13px; line-height: 1.4; text-decoration: none; }
-.github-link:hover { background: #f8f9fa; border-color: #bdc1c6; }
-.github-link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-.github-link img { width: 72px; height: auto; flex: 0 0 auto; }
+.save-links { display: flex; align-items: center; gap: 8px; min-width: 0; margin-right: auto; }
+.footer-link { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; color: #202124; font-size: 13px; line-height: 1.4; text-decoration: none; }
+.footer-link:hover { background: #f8f9fa; border-color: #bdc1c6; }
+.footer-link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.footer-link img { width: 72px; height: auto; flex: 0 0 auto; }
 .save-feedback { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .cache-settings { display: grid; gap: 24px; }
 .cache-group { display: grid; grid-template-columns: var(--settings-label-width) minmax(0, 1fr); column-gap: 24px; align-items: start; }
@@ -208,10 +208,11 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 .budget-metrics strong { margin: 0 3px; font-size: 22px; font-weight: 600; color: #202124; }
 .budget-amounts > span { display: inline-block; white-space: nowrap; }
 #closeWithoutSaving { flex-shrink: 0; }
-:is(#closeWithoutSaving, #clearCache, #deleteApiKey, [data-edit-group][aria-pressed="true"]):not(:disabled) { color: #c5221f; }
-:is(#resetInputPrice, #resetUsage, [data-reset-group]):not(:disabled) { color: var(--muted); }
+:is(#closeWithoutSaving, #clearCache, #deleteApiKey, #resetUsage, [data-edit-group][aria-pressed="true"]):not(:disabled) { color: #c5221f; }
+:is(#resetInputPrice, [data-reset-group]):not(:disabled) { color: var(--muted); }
+#resetUsage:not(:disabled) { color: #c5221f; }
 #rules .rule-heading > [data-edit-group][aria-pressed="true"]:not(:disabled) { color: #c5221f; }
-:is(#closeWithoutSaving, #clearCache, #deleteApiKey, [data-edit-group][aria-pressed="true"]):not(:disabled):hover { color: #fff; background: #c5221f; border-color: #c5221f; }
+:is(#closeWithoutSaving, #clearCache, #deleteApiKey, #resetUsage, [data-edit-group][aria-pressed="true"]):not(:disabled):hover { color: #fff; background: #c5221f; border-color: #c5221f; }
 #rules .rule-heading > [data-edit-group][aria-pressed="true"]:not(:disabled):hover { color: #fff; background: #c5221f; border-color: #c5221f; }
 @media (max-width: 480px) {
   .usage-settings-actions, #rules .rule-group > .rule-actions { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }

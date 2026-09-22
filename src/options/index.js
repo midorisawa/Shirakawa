@@ -38,12 +38,12 @@ function animateToggle(input) {
 }
 const buttonIcons = { edit:'ic_fluent_edit_24_regular.svg', discard:'ic_fluent_arrow_reset_24_regular.svg', reset:'ic_fluent_arrow_reset_24_regular.svg', trash:'ic_fluent_delete_24_regular.svg', dismiss:'ic_fluent_game_controller_button_x_20_regular.svg', save:'ic_fluent_save_24_regular.svg', plus:'M12 5v14m-7-7h14', check:'m5 12 4 4L19 6', download:'M12 4v11m0 0 4-4m-4 4-4-4M5 20h14', upload:'M12 16V5m0 0 4 4m-4-4-4 4M5 20h14' };
 function buttonIconKey(button) {
-  if (button.dataset.editGroup) return button.getAttribute('aria-pressed') === 'true' ? 'discard' : 'edit';
+  if (button.dataset.editGroup) return button.getAttribute('aria-pressed') === 'true' ? null : 'edit';
   if (button.dataset.resetGroup || ['resetInputPrice', 'resetUsage', 'resetAllUsage'].includes(button.id)) return 'reset';
   if (button.dataset.remove || button.dataset.removeLimit) return 'dismiss';
   if (button.dataset.addGroup || button.id === 'addUsageLimit') return 'plus';
   if (['save', 'saveApiKey'].includes(button.id)) return 'save';
-  if (['closeWithoutSaving', 'cancelApiKey', 'cancelUsageLimit'].includes(button.id)) return 'discard';
+  if (['cancelApiKey', 'cancelUsageLimit'].includes(button.id)) return 'discard';
   if (button.classList.contains('file-control')) return 'upload';
   if (button.id === 'changeApiKey') return 'edit';
   if (['clearCache', 'deleteApiKey'].includes(button.id)) return 'trash';
@@ -231,11 +231,14 @@ function render() {
     heading.textContent = title;
     const headingBar = document.createElement('div');
     headingBar.className = 'rule-heading';
+    const reset = document.createElement('button');
+    reset.type = 'button'; reset.id = `reset-${group}`; reset.dataset.resetGroup = group; reset.textContent = '初期設定に戻す';
     const editButton = document.createElement('button');
     editButton.type = 'button'; editButton.dataset.editGroup = group;
     editButton.textContent = editing ? '編集を破棄する' : '編集する';
     editButton.setAttribute('aria-pressed', String(editing));
-    headingBar.append(heading, editButton);
+    reset.hidden = !editing;
+    headingBar.append(heading, reset, editButton);
     const nodes = [headingBar];
     rules.forEach((rule, index) => {
       const row = document.createElement('p');
@@ -252,9 +255,7 @@ function render() {
     actions.className = 'rule-actions';
     const add = document.createElement('button');
     add.type = 'button'; add.id = `add-${group}`; add.dataset.addGroup = group; add.textContent = '条件を追加する';
-    const reset = document.createElement('button');
-    reset.type = 'button'; reset.id = `reset-${group}`; reset.dataset.resetGroup = group; reset.textContent = '初期設定に戻す';
-    actions.append(reset, add); actions.hidden = !editing; nodes.push(actions);
+    actions.append(add); actions.hidden = !editing; nodes.push(actions);
     const section = document.createElement('section');
     section.className = 'rule-group';
     section.dataset.editing = String(editing);
@@ -410,7 +411,7 @@ function keyMessage(result) {
   return result?.status ? `APIエラー（HTTP ${result.status}）` : '確認できませんでした';
 }
 $('rules').onclick = event => { if (saving) return; const group = event.target.dataset.addGroup; if (group) { read(); config[`${group}Rules`].push({ condition: '', threshold: 0.8, enabled: true }); render(); markDirty(); [...document.querySelectorAll('[data-group]')].filter(row => row.dataset.group === group).at(-1)?.querySelector('textarea').focus(); return; } const resetGroup = event.target.dataset.resetGroup; if (resetGroup) { read(); config[`${resetGroup}Rules`] = structuredClone(DEFAULT_CONFIG[`${resetGroup}Rules`]); pendingActions[`${resetGroup}Reset`] = true; render(); markDirty(); return; } const removeButton = event.target.closest('button[data-remove]'); if (removeButton) { read(); const row = removeButton.closest('p'); const rules = row.dataset.group === 'white' ? config.whiteRules : config.blackRules; rules.splice(Number(removeButton.dataset.remove), 1); render(); markDirty(); } };
-$('rules').addEventListener('click', event => { const group = event.target.dataset.editGroup; if (!group || saving) return; read(); if (ruleEditMode[group]) { config[`${group}Rules`] = structuredClone(ruleEditSnapshots[group] || config[`${group}Rules`]); pendingActions[`${group}Reset`] = ruleEditPendingSnapshots[group]; ruleEditSnapshots[group] = null; ruleEditPendingSnapshots[group] = false; ruleEditMode[group] = false; } else { ruleEditSnapshots[group] = structuredClone(config[`${group}Rules`]); ruleEditPendingSnapshots[group] = pendingActions[`${group}Reset`]; ruleEditMode[group] = true; } render(); markDirty(); });
+$('rules').addEventListener('click', event => { const group = event.target.dataset.editGroup; if (!group || saving) return; read(); if (ruleEditMode[group]) { config[`${group}Rules`] = structuredClone(ruleEditSnapshots[group] || config[`${group}Rules`]); pendingActions[`${group}Reset`] = ruleEditPendingSnapshots[group]; ruleEditSnapshots[group] = null; ruleEditPendingSnapshots[group] = false; ruleEditMode[group] = false; } else { ruleEditSnapshots[group] = structuredClone(config[`${group}Rules`]); ruleEditPendingSnapshots[group] = pendingActions[`${group}Reset`]; ruleEditMode[group] = true; } render(); markDirty(); if (ruleEditMode[group]) document.querySelector(`[data-group="${group}"] textarea`)?.focus(); });
 function clearRuleDrag() {
   if (!activeDrag) return;
   if (activeDrag.scrollFrame) cancelFrame(activeDrag.scrollFrame);
