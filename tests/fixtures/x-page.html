@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>X fixture</title>
+  <style>
+    body { margin: 0; font: 16px sans-serif; }
+    main { width: 600px; margin: auto; }
+    article { border-bottom: 1px solid #ddd; padding: 16px; }
+    .quote { border: 1px solid #ccc; padding: 8px; }
+    .controls { position: sticky; top: 0; background: white; padding: 8px; }
+    .demo-note { margin: 12px auto; max-width: 600px; padding: 10px 12px; border: 1px solid #f0b429; background: #fff8df; }
+  </style>
+</head>
+<body>
+  <main data-fixture-page>
+    <div class="controls" data-fixture-controls>
+      <button type="button" data-action="add">投稿を追加</button>
+      <button type="button" data-action="replace">先頭投稿を差し替え</button>
+    </div>
+    <div data-testid="primaryColumn">
+      <section role="region" aria-label="投稿一覧">
+        <div data-testid="cellInnerDiv">
+          <div><div><article role="article" data-testid="tweet" data-post-id="fixture-1">
+            <div data-testid="User-Name"><span>架空ユーザー</span></div>
+            <a href="/fictional_user/status/fixture-1"><time datetime="2026-09-20T00:00:00.000Z">2026年9月20日</time></a>
+            <div data-testid="tweetText">落ち着いた内容の架空投稿</div>
+          </article></div></div>
+        </div>
+        <div data-testid="cellInnerDiv">
+          <div><div><article role="article" data-testid="tweet" data-post-id="fixture-2">
+            <div data-testid="User-Name"><span>引用元ユーザー</span></div>
+            <a href="/fictional_user/status/fixture-2"><time datetime="2026-09-20T00:01:00.000Z">2026年9月20日</time></a>
+            <div data-testid="tweetText">引用を含む架空投稿</div>
+            <div role="link" class="quote">
+              <div data-testid="User-Name"><span>引用された架空ユーザー</span></div>
+              <time datetime="2026-09-19T00:00:00.000Z">2026年9月19日</time>
+              <div data-testid="tweetText">引用カード内の架空投稿</div>
+            </div>
+          </article></div></div>
+        </div>
+        <div data-testid="cellInnerDiv">
+          <div><div><article role="article" data-testid="tweet" data-post-id="fixture-3">
+            <div data-testid="User-Name"><span>本文なしユーザー</span></div>
+            <a href="/fictional_user/status/fixture-3"><time datetime="2026-09-20T00:02:00.000Z">2026年9月20日</time></a>
+          </article></div></div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const primary = document.querySelector('[data-testid="primaryColumn"]');
+    const region = primary.querySelector('[role="region"]');
+    const createPost = (id, text) => {
+      const cell = document.createElement('div');
+      cell.dataset.testid = 'cellInnerDiv';
+      cell.innerHTML = `<div><div><article role="article" data-testid="tweet" data-post-id="${id}"><div data-testid="User-Name"><span>追加された架空ユーザー</span></div><a href="/fictional_user/status/${id}"><time datetime="2026-09-20T00:03:00.000Z">2026年9月20日</time></a><div data-testid="tweetText">${text}</div></article></div></div>`;
+      return cell;
+    };
+    document.querySelector('[data-action="add"]').addEventListener('click', () => region.append(createPost('fixture-added', '動的に追加された架空投稿')));
+    document.querySelector('[data-action="replace"]').addEventListener('click', () => {
+      const article = region.querySelector('article[data-testid="tweet"]');
+      article.dataset.postId = 'fixture-replaced';
+      article.querySelector('[data-testid="User-Name"] span').textContent = '差し替え後の架空ユーザー';
+      const status = article.querySelector('a[href*="/status/"]');
+      status.href = '/fictional_user/status/fixture-replaced';
+      status.querySelector('time').dateTime = '2026-09-20T00:04:00.000Z';
+      article.querySelector(':scope > [data-testid="tweetText"]').textContent = '同じarticleを使って差し替えた架空投稿';
+    });
+  </script>
+  <script type="module">
+    import { normalizeConfig } from '/src/core/config.js';
+    if (new URLSearchParams(location.search).has('demo')) {
+      const note = document.createElement('aside');
+      note.className = 'demo-note';
+      note.textContent = 'テスト用デモ：Jev APIは呼び出さず、本文に応じたモック判定を使っています。引用・動的追加・差し替え投稿は該当として折りたたみ、表示ボタンで復元できます。';
+      document.body.prepend(note);
+      const config = normalizeConfig({
+        enabled: true,
+        threshold: 0.8,
+        pending: 'show',
+        unknown: 'show',
+        matched: 'collapse',
+        pages: { recommended: true, following: true, search: true, list: true },
+        blackRules: [{ condition: 'デモ用の判定', enabled: true }]
+      });
+      const ruleId = config.blackRules[0].id;
+      globalThis.chrome = {
+        storage: { local: { get: async () => ({ config }) }, onChanged: { addListener() {} } },
+        runtime: { sendMessage: async message => message.type === 'get-config' ? config : ({ answers: { [ruleId]: { noul: /引用|動的|差し替え/.test(message.text) ? 0.95 : 0.1 } } }) }
+      };
+      await import('/src/content.js');
+    }
+  </script>
+</body>
+</html>

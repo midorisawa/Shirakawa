@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shirakawaの設定</title>
+<link rel="stylesheet" href="index.css">
+</head>
+<body>
+<main class="page-shell">
+  <header class="page-header">
+    <div class="app-header"><div class="app-title"><h1><img src="../icons/Shirakawa-logo_simple.png" alt="Shirakawa"></h1></div><div class="toggle-control"><input id="enabled" class="rule-switch" role="switch" aria-label="フィルターの有効・無効" type="checkbox"><span id="enabledLabel">無効</span></div></div>
+    <p id="filterStatus" class="help-text" aria-live="polite"></p>
+  </header>
+  <nav class="settings-tabs" role="tablist" aria-label="設定の項目">
+    <button id="tab-connection" role="tab" type="button" aria-controls="panel-connection" aria-selected="false" tabindex="-1">API接続</button>
+    <button id="tab-usage" role="tab" type="button" aria-controls="panel-usage" aria-selected="true">使用量・上限</button>
+    <button id="tab-rules" role="tab" type="button" aria-controls="panel-rules" aria-selected="false" tabindex="-1">フィルター条件</button>
+    <button id="tab-cache" role="tab" type="button" aria-controls="panel-cache" aria-selected="false" tabindex="-1">キャッシュ</button>
+  </nav>
+
+  <section id="panel-connection" class="setting-section" role="tabpanel" aria-labelledby="tab-connection" hidden>
+    <div class="connection-settings">
+      <div class="connection-group">
+        <div class="connection-grid">
+          <label class="connection-label" for="provider">接続先</label>
+          <div class="connection-control"><select id="provider"><option value="typesafe">TypeSafe（Jev API）</option><option value="openrouter">OpenRouter（Jev）</option></select></div>
+          <p class="help-text">投稿の判定には選択したサービスのAPIキーが必要です。判定時に投稿本文と条件を送信します。</p>
+        </div>
+      </div>
+      <div class="connection-group">
+        <div class="connection-grid">
+          <div class="connection-label key-state"><span id="apiKeyLabel">APIキー</span><span id="keyStatus" class="status-label" aria-live="polite">取得中…</span></div>
+          <p id="apiKeyRow" class="connection-control"><input id="apiKey" type="password" autocomplete="off" aria-labelledby="apiKeyLabel" aria-describedby="key-help"></p>
+          <div class="button-row">
+            <button id="saveApiKey" class="button button-primary" type="button" hidden>接続を確認してキーを保存する</button>
+            <button id="changeApiKey" class="button" type="button" hidden>APIキーを変更する</button>
+            <button id="cancelApiKey" class="button" type="button" hidden>キーの変更をキャンセルする</button>
+            <button id="deleteApiKey" class="button button-danger" type="button" hidden>APIキーを削除する</button>
+          </div>
+          <p id="key-help" class="help-text">APIキーは「接続を確認してキーを保存」で個別に保存します。キーはブラウザ内にローカル保存され、選択したAPIサービス以外には送信されません。<span id="key-usage-note" hidden>接続確認時、API利用が発生します。</span></p>
+        </div>
+      </div>
+      <div class="connection-group">
+        <div class="connection-grid">
+          <label class="connection-label" for="model">モデルID</label>
+          <div class="connection-control"><input id="model" aria-describedby="model-help"></div>
+          <p id="model-help" class="help-text">通常は変更不要です。接続先で利用できるJevのモデルIDを指定します。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="panel-usage" class="setting-section" role="tabpanel" aria-labelledby="tab-usage">
+    <p id="usage" class="usage-total">使用量を取得中…</p>
+    <div id="usageLimitsStatus" class="usage-limits" aria-live="polite">上限の状況を取得中…</div>
+    <p class="help-text">表示金額は下記で入力された単価に基づいた概算であり、実際の請求額とは異なる場合があります。いずれかの上限に達した場合は新規の判定が一時停止し、期間がリセットされると自動的に再開されます。</p>
+    <div class="usage-settings">
+      <p class="price-controls"><label>入力単価<input id="inputPricePerMillion" type="number" min="0" step="any" required></label><label><select id="billingCurrency" aria-label="通貨"><option value="USD">USD</option><option value="JPY">JPY</option></select><span>／100万トークン</span></label></p>
+      <p id="zeroPriceWarning" class="help-text" role="status" hidden>入力単価が0のため、料金と利用上限のトークン数を計算できません。利用上限は適用されません。</p>
+      <div id="usageLimitInputs"></div>
+      <p class="usage-settings-actions"><button id="resetInputPrice" type="button" title="入力単価・通貨・上限額を初期値に戻す">初期値に戻す</button><button id="addUsageLimit" type="button" aria-expanded="false" aria-controls="usageLimitPicker">上限を追加する</button></p>
+      <p id="usageLimitPicker" class="inline-controls" hidden><label>集計期間<select id="usageLimitPeriod"><option value="5h">5時間</option><option value="1d">1日（24時間）</option><option value="7d">7日間</option><option value="30d">30日間</option></select></label><button id="confirmUsageLimit" type="button">追加する</button><button id="cancelUsageLimit" type="button">キャンセルする</button></p>
+    </div>
+    <details class="secondary-details"><summary>期間内の使用量をリセットする</summary><div class="details-content"><p class="help-text">すべての期間の使用量を0に戻し、今から集計し直します。上限による停止は解除されます。累計トークン数とサービス側の請求額は変わりません。</p><button id="resetUsage" class="button" type="button">期間内の使用量をリセットする</button></div></details>
+  </section>
+
+  <section id="panel-rules" class="setting-section" role="tabpanel" aria-labelledby="tab-rules" hidden>
+    <div class="priority-notice"><span class="priority-notice-mark" aria-hidden="true">!</span><span>ブラックリストはホワイトリストより優先されます。</span></div>
+    <div id="rules"></div>
+    <details class="secondary-details"><summary>フィルター条件のバックアップ・読み込み</summary><div class="details-content">
+      <p class="help-text">条件・スコア・有効/無効の設定をJSONファイルに保存します。ファイルを読み込むと、現在の設定はファイル内のデータで上書きされます。</p>
+      <div class="button-row"><button id="export" class="button" type="button">条件をファイルに保存する</button><label class="file-control">ファイルから読み込む<input id="import" type="file" accept="application/json"></label></div>
+    </div></details>
+  </section>
+
+  <section id="panel-cache" class="setting-section" role="tabpanel" aria-labelledby="tab-cache" hidden>
+    <div class="cache-settings">
+      <div class="cache-group">
+        <div class="cache-label">現在のキャッシュサイズ</div>
+        <div class="cache-content cache-current">
+          <div class="cache-usage-meta">
+            <p class="cache-usage" aria-live="polite"><span id="cacheUsageValue">取得中…</span><span id="cacheUsageUnit" class="cache-usage-unit"></span></p>
+            <p class="help-text">各投稿の判定結果は取得後30日間キャッシュとして保存されます。</p>
+          </div>
+          <div class="cache-clear-action">
+            <button id="clearCache" class="button" type="button">キャッシュをクリアする</button>
+            <p class="help-text">削除後は必要に応じてAPIで再判定するため、使用量が増えます。</p>
+          </div>
+        </div>
+      </div>
+      <div class="cache-group">
+        <label class="cache-label" for="decisionCacheLimitMb">最大キャッシュサイズ</label>
+        <div class="cache-content">
+          <div class="cache-limit-control"><input id="decisionCacheLimitMb" type="number" min="1" max="10240" step="1" aria-label="最大キャッシュサイズ（MB）" required><span aria-hidden="true">MB</span></div>
+          <p class="help-text">このサイズを超えると、最近使われていないキャッシュから順に自動で削除されます。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+<div class="save-bar"><a class="github-link" href="https://github.com/midorisawa/Shirakawa" target="_blank" rel="noopener noreferrer" aria-label="GitHubで使い方・ソースコードを見る" title="Githubでリポジトリを見る"><img src="../icons/GitHub_Lockup_Black_Clearspace.svg" alt="GitHub"></a><div class="save-feedback"><span id="saveState" aria-live="polite"></span><output id="status" role="status" aria-live="polite"></output></div><button id="closeWithoutSaving" type="button" disabled>保存せず閉じる</button><button id="save" class="button-primary" type="button" disabled>保存する</button></div>
+<script type="module" src="index.js"></script>
+</body>
+</html>

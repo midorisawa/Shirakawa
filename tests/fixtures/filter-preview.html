@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>非表示投稿の表示確認</title>
+  <style>
+    body { margin: 0; background: #000; color: #e7e9ea; font: 15px/1.5 Arial, sans-serif; }
+    header { padding: 16px; border-bottom: 1px solid #536471; }
+    .store-brand { display: none; align-items: center; gap: 24px; }
+    .store-brand img { display: block; width: 180px; height: auto; }
+    .demo-label { padding: 5px 10px; border-radius: 999px; background: #f1f5f9; color: #475569; font-size: 13px; }
+    main { width: 600px; max-width: 100%; margin: auto; border-inline: 1px solid #536471; }
+    article { display: flex; flex-direction: row; padding: 0 16px 12px; border-bottom: 1px solid #536471; cursor: pointer; }
+    article > .post-shell { flex: 1; min-width: 0; }
+    .post-spacer { height: 12px; }
+    article > .post { min-width: 0; flex: 1; }
+    .name { display: flex; align-items: center; gap: 4px; min-width: 0; font-weight: bold; }
+    .name a { color: inherit; text-decoration: none; }
+    .name span, .name time { color: #71767b; font-weight: normal; }
+    .avatar { display: grid; width: 40px; height: 40px; flex: none; place-items: center; margin-right: 12px; border-radius: 50%; background: #536471; font-weight: bold; }
+    .post-row { display: flex; min-width: 0; flex: 1; }
+    .post-row > .post { min-width: 0; flex: 1; }
+    .post-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .post-header > button { border: 0; background: none; color: inherit; }
+    .quote .avatar { width: 20px; height: 20px; margin-right: 4px; }
+    .quote { display: flex; flex-direction: column; margin-top: 12px; overflow: hidden; border: 1px solid #536471; border-radius: 16px; }
+    .quote > div { padding: 0; }
+    .quote .post-header { margin: 12px 12px 0; }
+    .quote [data-testid="tweetText"] { margin: 0 12px 12px; }
+    .actions { margin-top: 12px; opacity: .65; }
+    button { cursor: pointer; }
+    body.light { background: #fff; color: #0f1419; }
+
+    body.store-mode { background: #fff; color: #0f1419; font: 15px/1.5 system-ui, "Yu Gothic UI", Meiryo, sans-serif; }
+    .store-mode header { display: none; }
+    .store-mode main { width: 600px; max-width: 100%; margin: 0 auto; border-inline: 1px solid #eff3f4; background: #fff; }
+    .store-mode article { box-sizing: border-box; padding: 12px 16px 14px; border-bottom-color: #eff3f4; cursor: default; }
+    .store-mode article:last-child { border-bottom: 0; }
+    .store-mode .post-spacer { height: 0; }
+    .store-mode .avatar { width: 40px; height: 40px; overflow: hidden; background: #d2d9df; color: #647581; text-decoration: none; }
+    .store-mode .avatar > svg { display: block; width: 100%; height: 100%; }
+    .store-mode [data-testid="tweetText"] { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .store-mode .post-header .name { flex: 1 1 0%; flex-wrap: nowrap; min-width: 0; overflow: hidden; white-space: nowrap; }
+    .store-mode .name { gap: 4px; }
+    .store-mode .name a:first-child { display: block; min-width: 0; max-width: 100%; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
+    .store-mode .name span, .store-mode .name time { white-space: nowrap; }
+    .store-mode .name span, .store-mode .name time { color: #657786; }
+    .store-mode .post-header > button { color: #536471; font-size: 20px; line-height: 1; }
+    .store-mode .actions { display: flex; align-items: center; justify-content: space-between; max-width: 480px; margin: 12px 4px 0; color: #657786; font-size: 13px; }
+    .store-mode .action { display: inline-flex; align-items: center; gap: 6px; min-width: 32px; }
+    .store-mode .action svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .store-mode .quote { border-color: #cfd9de; background: transparent; }
+    @media (max-width: 600px) {
+      .store-mode main { border-inline: 0; }
+      .store-mode article { padding-inline: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="verification-note">非表示投稿の表示確認（架空の投稿・API通信なし）</span>
+    <div class="store-brand">
+      <img src="/assets/Shirakawa-logo_simple.png" alt="Shirakawa">
+      <span class="demo-label">デモ画面 · 投稿・アカウントは架空です</span>
+    </div>
+    <button id="theme" type="button">明るさを切り替え</button>
+  </header>
+  <main><div data-testid="primaryColumn">
+    <article role="article" data-testid="tweet" data-post-id="hidden">
+      <div class="post-shell"><div class="post-spacer"><div></div></div><div class="post-row">
+        <a class="avatar" data-testid="Tweet-User-Avatar" href="#aoba_note_demo" aria-label="青葉ノートのプロフィール">青</a>
+        <div class="post"><div class="post-header"><div class="name" data-testid="User-Name"><a href="#aoba_note_demo">青葉ノート</a><span>@aoba_note_demo ·</span><a href="#hidden-date"><time>9月22日</time></a></div><button aria-label="その他">···</button></div>
+          <div data-testid="tweetText">市議会で話題の公園整備について、進め方や予算にいろいろな意見があるようです。</div><div class="actions" aria-label="ポストの操作"></div>
+        </div>
+      </div></div>
+    </article>
+    <article role="article" data-testid="tweet" data-post-id="quote">
+      <div class="post-shell"><div class="post-spacer"><div></div></div><div class="post-row">
+        <a class="avatar" data-testid="Tweet-User-Avatar" href="#yuu_demo" aria-label="ゆうのプロフィール">ゆ</a>
+        <div class="post"><div class="post-header"><div class="name" data-testid="User-Name"><a href="#yuu_demo">ゆう</a><span>@yuu_demo ·</span><a href="#quote-date"><time>9月22日</time></a></div><button aria-label="その他">···</button></div>
+          <div data-testid="tweetText">いろいろな意見があるけれど、落ち着いて話し合いたいですね。</div>
+          <div class="quote" role="link" tabindex="0"><div><div class="post-header"><div class="name" data-testid="User-Name"><span class="avatar" data-testid="UserAvatar-Container-quoted">こ</span><a href="#koharu_demo">こはる</a><span>@koharu_demo ·</span><a href="#quoted-date"><time>9月22日</time></a></div><button aria-label="その他">···</button></div>
+            <div data-testid="tweetText">市議会の公園整備案、予算を決める前に地域の人の声も聞けたらいいな。</div>
+          </div></div><div class="actions" aria-label="ポストの操作"></div>
+        </div>
+      </div></div>
+    </article>
+    <article role="article" data-testid="tweet" data-post-id="visible">
+      <div class="post-shell"><div class="post-spacer"><div></div></div><div class="post-row">
+        <a class="avatar" data-testid="Tweet-User-Avatar" href="#koharu_demo" aria-label="こはるのプロフィール">こ</a>
+        <div class="post"><div class="post-header"><div class="name" data-testid="User-Name"><a href="#koharu_demo">こはる</a><span>@koharu_demo ·</span><a href="#visible-date"><time>9月22日</time></a></div><button aria-label="その他">···</button></div>
+          <div data-testid="tweetText">今朝の散歩で、川沿いの桜が少し咲いていました。春が近づいてきた感じ。</div><div class="actions" aria-label="ポストの操作"></div>
+        </div>
+      </div></div>
+    </article>
+  </div></main>
+  <template id="store-post-template">
+    <article role="article" data-testid="tweet" data-post-id="added">
+      <div class="post-shell"><div class="post-spacer"><div></div></div><div class="post-row">
+        <a class="avatar" data-testid="Tweet-User-Avatar" href="#nagi_demo" aria-label="なぎのプロフィール">な</a>
+        <div class="post"><div class="post-header"><div class="name" data-testid="User-Name"><a href="#nagi_demo">なぎ</a><span>@nagi_demo ·</span><a href="#added-date"><time>9月22日</time></a></div><button aria-label="その他">···</button></div>
+          <div data-testid="tweetText"></div><div class="actions" aria-label="ポストの操作"></div>
+        </div>
+      </div></div>
+    </article>
+  </template>
+  <template id="store-post-template-5">
+    <article role="article" data-testid="tweet" data-post-id="fifth">
+      <div class="post-shell"><div class="post-spacer"><div></div></div><div class="post-row">
+        <a class="avatar" data-testid="Tweet-User-Avatar" href="#morikabe_yasutaro" aria-label="森壁 安太郎｜目指せ内閣総辞職のプロフィール">街</a>
+        <div class="post"><div class="post-header"><div class="name" data-testid="User-Name"><a href="#morikabe_yasutaro">森壁 安太郎｜目指せ内閣総辞職</a><span>@morikabe_yasutaro ·</span><a href="#fifth-date"><time>9月22日</time></a></div><button aria-label="その他">···</button></div>
+          <div data-testid="tweetText"></div><div class="actions" aria-label="ポストの操作"></div>
+        </div>
+      </div></div>
+    </article>
+  </template>
+  <script type="module">
+    import { normalizeConfig } from '/src/core/config.js';
+    const params = new URLSearchParams(location.search);
+    const storeMode = params.has('store');
+    const filterMode = params.get('filter') === 'off' ? 'off' : 'on';
+    if (storeMode) document.body.classList.add('store-mode');
+    const config = normalizeConfig({
+      enabled: filterMode === 'on',
+      matched: 'collapse',
+      pending: 'show',
+      unknown: 'show',
+      blackRules: storeMode
+        ? [
+            { condition: '読者の怒りや憎悪の煽動、対立の助長', threshold: 0.9, enabled: true },
+            { condition: '特定の地域・団体・界隈や、個人の属性を一括りにした決めつけ', threshold: 0.9, enabled: true },
+            { condition: '攻撃的な表現による批判・反論', threshold: 0.9, enabled: true },
+            { condition: '他者への見下し・侮辱・嘲笑', threshold: 0.9, enabled: true },
+            { condition: '他人の楽しみに水を差す冷笑', threshold: 0.9, enabled: true },
+            { condition: '上から目線の説教やアドバイス', threshold: 0.9, enabled: true },
+            { condition: 'ユーモアの域を超えた、明らかな誇張や論理の飛躍したこじつけ', threshold: 0.9, enabled: true }
+          ]
+        : [
+            { condition: '攻撃的な表現による批判・反論', threshold: 0.8, enabled: true },
+            { condition: '特定の地域や団体、個人の属性を一括りにして決めつける投稿', threshold: 0.8, enabled: true }
+          ]
+    });
+    const postTexts = {
+      hidden: 'さっき公園のベンチでビリヤニ食べてたら、ナメック星人に「公共の場でそんなもの食うな」って怒鳴られた。\n公園で何を食べようが自由じゃないの？\nてか他人の食ってるものじろじろ見るなよ。\nナメック星人って他人の好みに口出ししてくるわりには、自分たちは迷惑かけてばかり。\nさっさと地球から出て行ってほしい人✋',
+      quote: 'マジで分からないのか...?\n義務教育どころか幼稚園児でも分かる話だろ...\nよくここまで生きてこれたな笑',
+      visible: '毎週この時間になると魔法少女ごぼうちゃんがトレンド入りしてるけど、あれって監督の過去作の焼き直しでしょ？\n演出はワンパターンだしストーリーも大して面白くのに、熱心に見てる奴の正気を疑う😅',
+      added: 'この1か月、本気で取り組んだものが無い人は、今後の人生できっと後悔する。\n今この瞬間に生き方を見直しましょう。',
+      fifth: '政府が来年度、全国の駅という駅に顔認証カメラを設置できる規模の「公共安全対策費」を要求。\n\nこれ、実質的に全国民をいつでも追跡できるってことですよ。\nここまで来たら、次は政府に都合の悪い人間を自動で特定して、外出すらできなくすることだって可能になる。\n日本は独裁監視国家になる。'
+    };
+    const storeScores = {
+      [postTexts.hidden]: {
+        '読者の怒りや憎悪の煽動、対立の助長': 0.91,
+        '特定の地域・団体・界隈や、個人の属性を一括りにした決めつけ': 0.95,
+        '攻撃的な表現による批判・反論': 0.96,
+        '他者への見下し・侮辱・嘲笑': 0.91
+      },
+      [postTexts.quote]: {
+        '攻撃的な表現による批判・反論': 0.96,
+        '他者への見下し・侮辱・嘲笑': 0.97
+      },
+      [postTexts.visible]: {
+        '攻撃的な表現による批判・反論': 0.94,
+        '他人の楽しみに水を差す冷笑': 0.95
+      },
+      [postTexts.added]: {
+        '上から目線の説教やアドバイス': 0.93
+      },
+      [postTexts.fifth]: {
+        'ユーモアの域を超えた、明らかな誇張や論理の飛躍したこじつけ': 0.93
+      }
+    };
+    globalThis.chrome = {
+      storage: { onChanged: { addListener() {} } },
+      runtime: {
+        sendMessage: async message => {
+          if (message.type === 'get-config') return config;
+          const answers = Object.fromEntries(config.blackRules.map(rule => {
+            const noul = storeMode
+              ? (filterMode === 'on' ? storeScores[message.text]?.[rule.condition] ?? 0.1 : 0.1)
+              : (message.text?.includes('非表示対象') ? 0.95 : 0.1);
+            return [rule.id, { noul }];
+          }));
+          return { answers };
+        }
+      }
+    };
+    if (storeMode) {
+      document.querySelector('[data-post-id="quote"] .quote').remove();
+      const primaryColumn = document.querySelector('[data-testid="primaryColumn"]');
+      primaryColumn.append(document.querySelector('#store-post-template').content.cloneNode(true));
+      primaryColumn.append(document.querySelector('#store-post-template-5').content.cloneNode(true));
+      for (const [id, text] of Object.entries(postTexts)) document.querySelector(`[data-post-id="${id}"] [data-testid="tweetText"]`).textContent = text;
+      const profiles = {
+        hidden: ['りな🌎', 'rina_love_earth'],
+        quote: ['IDGOLF', 'IDGOLF2014'],
+        visible: ['鮪', 'fjid92kfb298'],
+        added: ['けんと@FIRE達成✨1か月で2000万稼ぐ方法note販売中！', 'kento_trading'],
+        fifth: ['森壁 安太郎｜目指せ内閣総辞職', 'morikabe_yasutaro']
+      };
+      for (const [id, [name, handle]] of Object.entries(profiles)) {
+        const article = document.querySelector(`[data-post-id="${id}"]`);
+        const nameLink = article.querySelector('[data-testid="User-Name"] > a:first-child');
+        nameLink.textContent = name;
+        nameLink.href = `#${handle}`;
+        article.querySelector('[data-testid="User-Name"] > span').textContent = `@${handle} ·`;
+        const avatar = article.querySelector('[data-testid="Tweet-User-Avatar"]');
+        avatar.href = `#${handle}`;
+        avatar.setAttribute('aria-label', `${name}のプロフィール`);
+      }
+    } else {
+      document.querySelector('[data-post-id="hidden"] [data-testid="tweetText"]').textContent = '非表示対象の投稿。長い理由が複数あるケース。';
+      document.querySelector('[data-post-id="quote"] .post > [data-testid="tweetText"]').textContent = '本文を残し、引用元だけを非表示にするケース。';
+      document.querySelector('[data-post-id="quote"] .quote [data-testid="tweetText"]').textContent = '非表示対象の引用元。';
+      document.querySelector('[data-post-id="visible"] [data-testid="tweetText"]').textContent = '通常の投稿。表示と非表示を切り替えても周囲の投稿と重ならないことを確認します。';
+    }
+    document.querySelector('#theme').onclick = () => document.body.classList.toggle('light');
+    const actionIcons = [
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.25 11.5a8.25 8.25 0 0 1-8.25 8.25 8.4 8.4 0 0 1-4.1-1.07L3 20l1.32-4.42A8.2 8.2 0 0 1 3.75 11.5a8.25 8.25 0 0 1 16.5 0Z"/></svg>',
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m17 3 4 4-4 4M3 7h18M7 21l-4-4 4-4m14 4H3"/></svg>',
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 5.7a5 5 0 0 0-7.1 0L12 6.9l-1.2-1.2a5 5 0 0 0-7.1 7.1l1.2 1.2L12 21l7.1-7 1.2-1.2a5 5 0 0 0 0-7.1Z"/></svg>',
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20V11m6 9V5m6 15v-7m6 7V8"/></svg>',
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.75A1.75 1.75 0 0 1 7.75 3h8.5A1.75 1.75 0 0 1 18 4.75V21l-6-4-6 4V4.75Z"/></svg>',
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7 8m5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>'
+    ];
+    (storeMode
+      ? [['25','3,408','3.4万','248万'], ['4','107','1,290','8.1万'], ['2','32','4','1,024'], ['1','12','348','9,240'], ['2','2.4万','8万','1,900']]
+      : [['14','28','318','2.4万'], ['3','9','62','7300'], ['8','17','204','1.1万']]
+    ).forEach((counts, index) => {
+      const labels = ['返信','リポスト','いいね','表示数','ブックマーク','共有'];
+      document.querySelectorAll('.actions')[index].innerHTML = actionIcons.map((icon, i) => '<span class="action" aria-label="' + labels[i] + (counts[i] ? ' ' + counts[i] + '件' : '') + '" title="' + labels[i] + '">' + icon + (counts[i] || '') + '</span>').join('');
+    });
+    if (storeMode) document.querySelectorAll('.avatar').forEach(avatar => { avatar.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true" focusable="false"><circle cx="20" cy="14" r="7" fill="currentColor"/><path d="M5 40c.8-9.3 6.2-14.2 15-14.2S34.2 30.7 35 40H5Z" fill="currentColor"/></svg>'; });
+    await import('/src/content.js');
+  </script>
+</body>
+</html>

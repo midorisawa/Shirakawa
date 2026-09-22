@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.zip
+
+# ローカル環境ファイルと生成出力
+.env
+.env.*
+!.env.example
+/output/

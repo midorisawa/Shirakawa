@@ -1,0 +1,64 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>設定画面プレビュー</title>
+<style>
+  html, body { margin: 0; background: #ddd; }
+  iframe { display: none; width: 800px; height: 600px; border: 0; }
+  #preview-error { margin: 24px; padding: 16px; background: #fff; color: #202124; font: 14px/1.6 Arial, sans-serif; }
+</style>
+<p id="preview-error" hidden>dist/optionsが見つかりません。先にpnpm buildを実行してください。</p>
+<iframe title="設定画面"></iframe>
+<script>
+  const state = {
+    config: {
+      enabled: true,
+      provider: 'typesafe',
+      model: 'jev-latest',
+      inputPricePerMillion: 0.042,
+      billingCurrency: 'USD',
+      usageLimits: { '5h': 0.06, '1d': 0.10, '7d': 0.50, '30d': null },
+      decisionCacheLimitMb: 100,
+      blackRules: [
+        { id: 'black-1', condition: '政治的な話題', threshold: 0.8, enabled: true },
+        { id: 'black-2', condition: '攻撃的な表現', threshold: 0.8, enabled: true }
+      ],
+      whiteRules: [{ id: 'white-1', condition: '技術的な話題', threshold: 0.6, enabled: true }],
+      keyConfigured: true
+    }
+  };
+  const clone = value => structuredClone(value);
+  const usage = () => ({
+    inputTokens: 12000,
+    unreportedRequests: 0,
+    periods: {
+      '5h': { inputTokens: 12000, startedAt: Date.now() - 3600000 },
+      '1d': { inputTokens: 12000, startedAt: Date.now() - 3600000 },
+      '7d': { inputTokens: 12000, startedAt: Date.now() - 3600000 }
+    }
+  });
+  globalThis.chrome = {
+    runtime: {
+      sendMessage: async message => {
+        if (message.type === 'get-config') return { ...clone(state.config), keyConfigured: true, keyConfiguredByProvider: { typesafe: true } };
+        if (message.type === 'get-usage') return usage();
+        if (message.type === 'get-cache-size') return { bytes: 1048576 };
+        if (message.type === 'save-config') { state.config = { ...state.config, ...clone(message.config) }; return { ok: true, simulated: true }; }
+        if (message.type === 'clear-cache' || message.type === 'reset-usage') return { ok: true, simulated: true };
+        if (['verify-api-key', 'set-api-key', 'delete-api-key'].includes(message.type)) return { ok: false, reason: 'preview-no-api' };
+        return { ok: false, reason: 'unsupported-preview-message' };
+      }
+    },
+    storage: { onChanged: { addListener() {} } }
+  };
+  const error = document.querySelector('#preview-error');
+  const iframe = document.querySelector('iframe');
+  fetch('/dist/options/index.html').then(response => {
+    if (!response.ok) throw new Error('dist/options not found');
+    return response.text();
+  }).then(html => {
+    const base = '<base href="/dist/options/">';
+    const mock = `<script>globalThis.chrome = parent.chrome;<\/script>`;
+    iframe.srcdoc = html.replace('<head>', `<head>${base}${mock}`);
+    iframe.style.display = 'block';
+  }).catch(() => { error.hidden = false; });
+</script>
