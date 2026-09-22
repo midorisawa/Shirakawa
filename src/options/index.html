@@ -63,7 +63,7 @@
       <p id="usageLimitPicker" class="inline-controls" hidden><label>集計期間<select id="usageLimitPeriod"><option value="5h">5時間</option><option value="1d">1日（24時間）</option><option value="7d">7日間</option><option value="30d">30日間</option></select></label><button id="confirmUsageLimit" type="button">追加する</button><button id="cancelUsageLimit" type="button">キャンセルする</button></p>
     </div>
     <details class="secondary-details"><summary>期間内の使用量をリセットする</summary><div class="details-content"><p class="help-text">上限設定ごとの使用量を0に戻し、今から集計し直します。上限による停止は解除されます。累計トークン数とサービス側の請求額は変わりません。</p><button id="resetUsage" class="button" type="button">期間内の使用量をリセットする</button></div></details>
-    <details class="secondary-details"><summary>すべての使用量をリセットする</summary><div class="details-content"><p class="help-text">累計とすべての期間の使用量を0に戻し、今から集計し直します。使用量上限による停止は解除されます。サービス側の請求額は変わりません。</p><button id="resetAllUsage" class="button" type="button">すべての使用量をリセットする</button></div></details>
+    <details class="secondary-details"><summary>すべての使用量をリセットする</summary><div class="details-content"><p class="help-text">累計使用量と上限設定ごとの使用量を0に戻し、今から集計し直します。使用量上限による停止は解除されます。サービス側の請求額は変わりません。</p><button id="resetAllUsage" class="button" type="button">すべての使用量をリセットする</button></div></details>
   </section>
 
   <section id="panel-rules" class="setting-section" role="tabpanel" aria-labelledby="tab-rules" hidden>
