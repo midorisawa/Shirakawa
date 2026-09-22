@@ -41,7 +41,10 @@ test('編集とリスト操作は保存ボタンまで反映せず、保存時�
     assert.equal(document.getElementById('panel-usage').hidden, false);
     assert.equal(document.querySelector('.save-links a[href="https://forms.gle/4CB9upXFC3STrus16"]')?.textContent, '報告・要望');
     assert.equal(document.getElementById('closeWithoutSaving').querySelector('.button-icon'), null);
-    assert.match(readFileSync(new URL('../src/options/index.css', import.meta.url), 'utf8'), /\.rule-condition textarea\s*\{[^}]*resize:\s*none/s);
+    const optionsCss = readFileSync(new URL('../src/options/index.css', import.meta.url), 'utf8');
+    assert.match(optionsCss, /\.rule-condition textarea\s*\{[^}]*resize:\s*none/s);
+    assert.doesNotMatch(optionsCss, /gap:\s*24px 12px/);
+    assert.match(optionsCss, /\.rule-group:not\(\[data-editing="true"\]\) > p\[data-group\]:is\([\s\S]*?textarea \{ background: #f1f3f4/);
     const modelInput = document.getElementById('model');
     const originalModel = modelInput.value;
     assert.equal(document.getElementById('save').disabled, true);
@@ -108,9 +111,13 @@ test('編集とリスト操作は保存ボタンまで反映せず、保存時�
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(savedConfig.blackRules[0].threshold, 0.84);
     assert.equal(document.getElementById('saveState').textContent, '');
+    const textareaFocusOptions = [];
+    const originalTextareaFocus = dom.window.HTMLTextAreaElement.prototype.focus;
+    dom.window.HTMLTextAreaElement.prototype.focus = function (options) { textareaFocusOptions.push(options); return originalTextareaFocus.call(this, options); };
     document.querySelector('[data-edit-group="black"]').click();
     assert.equal(document.querySelector('[data-group="black"] textarea').hidden, false);
     assert.equal(document.activeElement, document.querySelector('[data-group="black"] textarea'));
+    assert.deepEqual(textareaFocusOptions.at(-1), { preventScroll: true });
     const discardButton = document.querySelector('[data-edit-group="black"]');
     assert.equal(discardButton.textContent, '編集を破棄する');
     assert.equal(discardButton.querySelector('.button-icon'), null);

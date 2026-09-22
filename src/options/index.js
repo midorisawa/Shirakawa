@@ -294,6 +294,11 @@ function render() {
   decorateButtons();
   document.documentElement.classList.add('options-ready');
 }
+function renderPreservingScroll() {
+  const scrollTop = document.body.scrollTop;
+  render();
+  document.body.scrollTop = scrollTop;
+}
 function escapeHtml(value) { return value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char])); }
 function read() {
   const rows = [...$('rules').querySelectorAll('p')];
@@ -350,7 +355,7 @@ async function saveConfig() {
     ruleEditPendingSnapshots.black = false;
     ruleEditPendingSnapshots.white = false;
     const failedActions = await executePendingActions(pendingSnapshot);
-    render();
+    renderPreservingScroll();
     status(failedActions.length ? `設定を保存しました。一部の操作に失敗しました：${failedActions.join('、')}` : '設定を保存しました');
   } catch { status('設定を保存できませんでした'); }
   finally { saving = false; $('enabled').disabled = false; updateDirtyState(); }
@@ -431,7 +436,7 @@ function keyMessage(result) {
   return result?.status ? `APIエラー（HTTP ${result.status}）` : '確認できませんでした';
 }
 $('rules').onclick = event => { if (saving) return; const group = event.target.dataset.addGroup; if (group) { read(); config[`${group}Rules`].push({ condition: '', threshold: 0.8, enabled: true }); render(); markDirty(); [...document.querySelectorAll('[data-group]')].filter(row => row.dataset.group === group).at(-1)?.querySelector('textarea').focus(); return; } const resetGroup = event.target.dataset.resetGroup; if (resetGroup) { read(); config[`${resetGroup}Rules`] = structuredClone(DEFAULT_CONFIG[`${resetGroup}Rules`]); pendingActions[`${resetGroup}Reset`] = true; render(); markDirty(); return; } const removeButton = event.target.closest('button[data-remove]'); if (removeButton) { read(); const row = removeButton.closest('p'); const rules = row.dataset.group === 'white' ? config.whiteRules : config.blackRules; rules.splice(Number(removeButton.dataset.remove), 1); render(); markDirty(); } };
-$('rules').addEventListener('click', event => { const group = event.target.dataset.editGroup; if (!group || saving) return; read(); if (ruleEditMode[group]) { config[`${group}Rules`] = structuredClone(ruleEditSnapshots[group] || config[`${group}Rules`]); pendingActions[`${group}Reset`] = ruleEditPendingSnapshots[group]; ruleEditSnapshots[group] = null; ruleEditPendingSnapshots[group] = false; ruleEditMode[group] = false; } else { ruleEditSnapshots[group] = structuredClone(config[`${group}Rules`]); ruleEditPendingSnapshots[group] = pendingActions[`${group}Reset`]; ruleEditMode[group] = true; } render(); markDirty(); if (ruleEditMode[group]) document.querySelector(`[data-group="${group}"] textarea`)?.focus(); });
+$('rules').addEventListener('click', event => { const group = event.target.dataset.editGroup; if (!group || saving) return; read(); if (ruleEditMode[group]) { config[`${group}Rules`] = structuredClone(ruleEditSnapshots[group] || config[`${group}Rules`]); pendingActions[`${group}Reset`] = ruleEditPendingSnapshots[group]; ruleEditSnapshots[group] = null; ruleEditPendingSnapshots[group] = false; ruleEditMode[group] = false; } else { ruleEditSnapshots[group] = structuredClone(config[`${group}Rules`]); ruleEditPendingSnapshots[group] = pendingActions[`${group}Reset`]; ruleEditMode[group] = true; } renderPreservingScroll(); markDirty(); if (ruleEditMode[group]) document.querySelector(`[data-group="${group}"] textarea`)?.focus({ preventScroll: true }); });
 function clearRuleDrag() {
   if (!activeDrag) return;
   if (activeDrag.scrollFrame) cancelFrame(activeDrag.scrollFrame);
