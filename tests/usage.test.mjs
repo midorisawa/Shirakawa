@@ -26,7 +26,7 @@ test('実要求だけusageを加算し、キャッシュと期間別・全使用
   globalThis.fetch = async (_url, options) => { calls++; return { ok: true, json: async () => { const body = JSON.parse(options.body); return { answers: Object.fromEntries(Object.keys(body.questions).map(id => [id, { noul: 0.1 }])), usage: calls === 1 ? { input_tokens: 10, output_tokens: 2 } : calls === 2 ? { input_tokens: 5 } : undefined }; } }; };
   try {
     await import(`../src/background.js?usage=${Date.now()}`);
-    const ask = text => new Promise(resolve => listener({ type: 'classify', text }, { url: 'https://x.com/home' }, resolve));
+    const ask = text => new Promise(resolve => listener({ type: 'classify', text, postId: text }, { url: 'https://x.com/home' }, resolve));
     const message = type => new Promise(resolve => listener({ type }, {}, resolve));
     await ask('same');
     await ask('same');

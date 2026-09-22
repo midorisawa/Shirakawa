@@ -159,6 +159,27 @@ test('本文と引用元を独立判定し、引用元だけのblackと本文bla
   dom.window.close();
 });
 
+test('本文投稿は引用カード内のstatus URLを投稿IDとして使わない', async () => {
+  const config = { enabled: true, pending: 'show', unknown: 'show', matched: 'collapse', blackRules: [{ id: hashCondition('条件'), condition: '条件', threshold: 0.8, enabled: true }], whiteRules: [] };
+  const messages = [];
+  globalThis.chrome = {
+    storage: { local: { get: async () => ({ config }) }, onChanged: { addListener() {} } },
+    runtime: { sendMessage: async message => { if (message.type === 'get-config') return config; messages.push(message); return { answers: { [hashCondition('条件')]: { noul: 0 } } }; } }
+  };
+  const dom = new JSDOM(`<main><div data-testid="primaryColumn"><article role="article" data-testid="tweet">
+    <a href="/owner/status/100"><time>親投稿</time></a><div data-testid="tweetText">親本文</div>
+    <div role="link"><div data-testid="User-Name">引用ユーザー</div><a href="/quoted/status/200"><time>引用投稿</time></a><div data-testid="tweetText">引用本文</div></div>
+  </article></div></main>`, { url: 'https://x.com/home', runScripts: 'dangerously', resources: 'usable' });
+  globalThis.document = dom.window.document;
+  globalThis.location = dom.window.location;
+  globalThis.MutationObserver = dom.window.MutationObserver;
+  await import(`../src/content.js?post-id=${Date.now()}`);
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal(messages.find(message => message.text === '親本文')?.postId, '100');
+  assert.equal(messages.find(message => message.text === '引用本文')?.postId, '200');
+  dom.window.close();
+});
+
 test('content scriptは同期throwで無効化されたコンテキストを停止し、非表示中の投稿を復元する', async () => {
   const config = {
     enabled: true,
