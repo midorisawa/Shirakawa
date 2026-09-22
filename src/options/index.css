@@ -31,14 +31,6 @@ p { margin: 0 0 16px; line-height: 1.65; }
 .settings-tabs [role="tab"] { flex: 1; height: 44px; line-height: 20px; padding: 10px 8px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: transparent; color: var(--muted); white-space: nowrap; }
 .settings-tabs [role="tab"]:hover { background: #f1f3f4; }
 .settings-tabs [aria-selected="true"] { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
-html.options-ready body:has(#enabled:not(:checked)) { background: #f5f5f5; }
-html.options-ready body:has(#enabled:not(:checked)) :is(.page-shell, .save-bar) { filter: grayscale(1); }
-html.options-ready body:has(#enabled:not(:checked)) :is(.app-title, .setting-section) { opacity: 0.6; }
-html.options-ready body:has(#enabled:not(:checked)) .setting-section { --panel-opacity: .6; }
-html.options-ready body:has(#enabled:not(:checked)) .settings-tabs [role="tab"] { color: #80868b; }
-html.options-ready body:has(#enabled:not(:checked)) .settings-tabs [aria-selected="true"] { color: #5f6368; border-bottom-color: #9aa0a6; }
-html.options-ready body:has(#enabled:not(:checked)) :is(.settings-tabs, .setting-section, .save-bar, #rules .rule-heading) { background: #f5f5f5; }
-html.options-ready body:has(#enabled:not(:checked)) :is(.page-shell, .usage-budget, .secondary-details, .details-content, .cache-content) { background: #f5f5f5; }
 .save-bar { position: fixed; inset: auto 0 0; z-index: 3; display: flex; align-items: center; justify-content: flex-end; gap: 16px; min-height: var(--save-bar-height); padding: 12px 24px; border-top: 1px solid var(--border); background: #fff; box-shadow: 0 -2px 8px #20212408; }
 .save-feedback { min-width: 0; display: grid; gap: 2px; text-align: right; font-size: 13px; line-height: 1.5; }
 #saveState { color: var(--muted); }
