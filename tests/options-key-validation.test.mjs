@@ -442,6 +442,7 @@ test('削除・リセット操作は保存時まで送信せず、確認キャ�
       if (message.type === 'get-config') return { ...DEFAULT_CONFIG, keyConfigured: true, keyConfiguredByProvider: { typesafe: true, openrouter: false } };
       if (message.type === 'get-usage') return { inputTokens: 0, unreportedRequests: 0, periods: {} };
       if (message.type === 'get-cache-size') return { bytes: 0 };
+      if (message.type === 'reset-usage' || message.type === 'reset-all-usage') return { ok: true, inputTokens: 0, unreportedRequests: 0, periods: {} };
       if (message.type === 'clear-cache' && cacheFailures-- > 0) return { ok: false };
       return { ok: true };
     } }
@@ -482,6 +483,8 @@ test('削除・リセット操作は保存時まで送信せず、確認キャ�
     assert.equal(messages.filter(message => message.type === 'reset-all-usage').length, 1);
     assert.equal(messages.filter(message => message.type === 'delete-api-key').length, 1);
     assert.match($('status').textContent, /一部の操作に失敗/);
+    assert.doesNotMatch($('status').textContent, /使用量リセット/);
+    assert.doesNotMatch($('status').textContent, /すべての使用量リセット/);
     $('save').click();
     await tick();
     assert.equal(messages.filter(message => message.type === 'clear-cache').length, 2);

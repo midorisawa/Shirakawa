@@ -583,14 +583,14 @@ function resetUsage() {
     const current = await getUsage();
     await chrome.storage.local.set({ tokenUsage: { inputTokens: current.inputTokens, unreportedRequests: current.unreportedRequests, periods: Object.fromEntries(Object.keys(USAGE_PERIODS).map(period => [period, { startedAt: Date.now(), inputTokens: 0, unreportedRequests: 0 }])) } });
   });
-  return usageQueue.then(async () => { await notifyConfig(); return getUsage(); });
+  return usageQueue.then(async () => { await notifyConfig(); return { ...(await getUsage()), ok: true }; });
 }
 function resetAllUsage() {
   usageQueue = usageQueue.then(async () => {
     const startedAt = Date.now();
     await chrome.storage.local.set({ tokenUsage: { inputTokens: 0, unreportedRequests: 0, periods: Object.fromEntries(Object.keys(USAGE_PERIODS).map(period => [period, { startedAt, inputTokens: 0, unreportedRequests: 0 }])) } });
   });
-  return usageQueue.then(async () => { await notifyConfig(); return getUsage(); });
+  return usageQueue.then(async () => { await notifyConfig(); return { ...(await getUsage()), ok: true }; });
 }
 
 void refreshActionIcon();
