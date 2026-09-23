@@ -84,8 +84,8 @@ test('編集とリスト操作は保存ボタンまで反映せず、保存時�
     assert.notEqual(filterNoticeStyle.backgroundColor, priorityNoticeStyle.backgroundColor);
     filterStatusCollapse.classList.remove('is-visible');
     assert.match(optionsCss, /#saveState:empty, #status:empty \{ display: none; \}/);
-    assert.match(optionsCss, /tab-panel-fade 180ms ease-out/);
-    assert.match(optionsCss, /tab-panel-fade \{ from \{ opacity: \.94; \} to \{ opacity: 1; \}/);
+    assert.match(optionsCss, /tab-panel-fade 300ms ease-out/);
+    assert.match(optionsCss, /tab-panel-fade \{ from \{ opacity: \.3; \} to \{ opacity: 1; \}/);
     assert.match(optionsCss, /\.settings-tabs:has\(#tab-rules\[aria-selected="true"\]\)::after \{ transform: translateX\(200%\); \}/);
     assert.match(optionsCss, /\.settings-tabs::after[^}]*transition: transform 280ms/s);
     assert.match(optionsCss, /button:not\(:disabled\):hover/);
