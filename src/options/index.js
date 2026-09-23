@@ -12,11 +12,57 @@ const scheduleFrame = callback => (window.requestAnimationFrame ? window.request
 const cancelFrame = id => (window.cancelAnimationFrame ? window.cancelAnimationFrame(id) : window.clearTimeout(id));
 const $ = id => document.getElementById(id);
 let statusTimer = 0;
+const feedbackStates = new WeakMap();
+function setFeedbackText(element, message, onHidden) {
+  const previous = feedbackStates.get(element);
+  const visible = element.classList.contains('feedback-visible');
+  if (message && visible && element.textContent === message && !previous?.hiding) return;
+  if (!message && previous?.hiding) { previous.onHidden = onHidden; return; }
+  if (!message && !visible) { onHidden?.(); return; }
+  if (previous?.timer) window.clearTimeout(previous.timer);
+  const opacity = visible ? Number(window.getComputedStyle(element).opacity) : 0;
+  previous?.animation?.cancel();
+  const state = { onHidden };
+  feedbackStates.set(element, state);
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const animate = frames => {
+    const animation = element.animate(frames, { duration: 110, easing: 'ease', fill: 'both' });
+    animation.finished.catch(() => {});
+    return animation;
+  };
+  if (message) {
+    element.removeAttribute('aria-hidden');
+    element.textContent = message;
+    element.classList.add('feedback-visible');
+    if (!reducedMotion && element.animate) state.animation = animate([{ opacity }, { opacity: 1 }]);
+    return;
+  }
+  if (reducedMotion || !element.animate) {
+    element.textContent = '';
+    element.classList.remove('feedback-visible');
+    element.setAttribute('aria-hidden', 'true');
+    feedbackStates.delete(element);
+    onHidden?.();
+    return;
+  }
+  state.hiding = true;
+  element.setAttribute('aria-hidden', 'true');
+  state.animation = animate([{ opacity }, { opacity: 0 }]);
+  state.timer = window.setTimeout(() => {
+    if (feedbackStates.get(element) !== state) return;
+    element.textContent = '';
+    element.classList.remove('feedback-visible');
+    state.animation.cancel();
+    feedbackStates.delete(element);
+    state.onHidden?.();
+  }, 110);
+}
 const status = (message, transient = true) => {
   if (statusTimer) window.clearTimeout(statusTimer);
-  $('status').textContent = message;
-  $('status').dataset.error = /できません|失敗|保存されていません/.test(message);
-  if (transient && message) statusTimer = window.setTimeout(() => { $('status').textContent = ''; $('status').dataset.error = 'false'; statusTimer = 0; }, 5000);
+  const element = $('status');
+  if (message) element.dataset.error = String(/できません|失敗|保存されていません/.test(message));
+  setFeedbackText(element, message, message ? undefined : () => { element.dataset.error = 'false'; });
+  if (transient && message) statusTimer = window.setTimeout(() => { statusTimer = 0; status(''); }, 5000);
 };
 const keyStatus = message => { $('keyStatus').textContent = message; };
 let confirmationPending = false;
@@ -144,7 +190,7 @@ function updateDirtyState() {
   };
   const invalid = [...document.querySelectorAll('input[type="number"]')].some(input => !input.checkValidity()) || [...document.querySelectorAll('[data-field="condition"]')].some(input => !input.value.trim());
   const dirty = invalid || comparable(config) !== comparable(appliedConfig) || pendingActions.cache || pendingActions.usage || pendingActions.allUsage || pendingActions.blackReset || pendingActions.whiteReset || pendingActions.priceReset || pendingActions.apiKeyDelete.size > 0;
-  if ($('saveState')) $('saveState').textContent = dirty ? '未保存の変更があります' : '';
+  if ($('saveState')) setFeedbackText($('saveState'), dirty ? '未保存の変更があります' : '');
   $('save').disabled = saving || !dirty;
   if ($('closeWithoutSaving')) $('closeWithoutSaving').disabled = saving || !dirty;
 }
@@ -345,6 +391,25 @@ function renderPreservingScroll() {
   render();
   document.body.scrollTop = scrollTop;
 }
+function animateAddedRule(group, id) {
+  const row = document.querySelector(`#rules [data-group="${group}"][data-id="${id}"]`);
+  if (!row || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || !row.animate) return;
+  const style = window.getComputedStyle(row);
+  const end = {
+    height: `${row.getBoundingClientRect().height}px`,
+    paddingBlock: style.paddingBlock,
+    marginBlock: style.marginBlock,
+    borderBottomWidth: style.borderBottomWidth,
+    opacity: 1
+  };
+  row.style.overflow = 'hidden';
+  const animation = row.animate([
+    { height: '0px', paddingBlock: '0px', marginBlock: '0px', borderBottomWidth: '0px', opacity: 0 },
+    end
+  ], { duration: 180, easing: 'ease-out', fill: 'both' });
+  const restoreOverflow = () => row.style.removeProperty('overflow');
+  animation.finished.then(restoreOverflow, restoreOverflow);
+}
 function escapeHtml(value) { return value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char])); }
 function read() {
   const rows = [...$('rules').querySelectorAll('p')];
@@ -479,7 +544,7 @@ function keyMessage(result) {
 $('rules').onclick = event => {
   if (saving) return;
   const add = event.target.closest('button[data-add-group]');
-  if (add) { const group = add.dataset.addGroup; read(); const rule = { id: crypto.randomUUID(), condition: '', threshold: 0.8, enabled: true }; config[`${group}Rules`].push(rule); activeRule = { group, id: rule.id }; renderPreservingScroll(); markDirty(); focusConditionTextarea(group, rule.id); return; }
+  if (add) { const group = add.dataset.addGroup; read(); const rule = { id: crypto.randomUUID(), condition: '', threshold: 0.8, enabled: true }; config[`${group}Rules`].push(rule); activeRule = { group, id: rule.id }; renderPreservingScroll(); animateAddedRule(group, rule.id); markDirty(); focusConditionTextarea(group, rule.id); return; }
   const reset = event.target.closest('button[data-reset-group]');
   if (reset) { const group = reset.dataset.resetGroup; read(); config[`${group}Rules`] = structuredClone(DEFAULT_CONFIG[`${group}Rules`]); const key = `${group}Rules`; pendingActions[`${group}Reset`] = JSON.stringify(config[key].map(({ condition, threshold, enabled }) => [condition, Number(threshold), Boolean(enabled)])) !== JSON.stringify(appliedConfig[key].map(({ condition, threshold, enabled }) => [condition, Number(threshold), Boolean(enabled)])); if (activeRule?.group === group) activeRule = null; renderPreservingScroll(); markDirty(); return; }
   const edit = event.target.closest('button[data-edit-rule]');
