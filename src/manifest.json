@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Shirakawa",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "JevでX投稿を判定し、条件に合う投稿を非表示にする",
   "permissions": ["storage"],
   "host_permissions": ["https://x.com/*", "https://api.typesafe.ai/*", "https://openrouter.ai/api/*"],
