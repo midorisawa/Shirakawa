@@ -4,12 +4,28 @@ import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
 import { DEFAULT_CONFIG } from '../src/core/config.js';
 
+function mockDialog(dom, decide = () => true) {
+  dom.window.HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+    queueMicrotask(() => {
+      const result = decide(this.querySelector('#confirmMessage')?.textContent ?? '');
+      if (result !== 'escape') this.returnValue = result ? 'confirm' : 'cancel';
+      this.open = false;
+      this.dispatchEvent(new dom.window.Event('close'));
+    });
+  };
+}
+
 test('編集とリスト操作は保存ボタンまで反映せず、保存時にAPIキー確認を再送しない', async () => {
   const originalDocument = globalThis.document;
   const originalWindow = globalThis.window;
   const originalChrome = globalThis.chrome;
   const dom = new JSDOM(readFileSync(new URL('../src/options/index.html', import.meta.url), 'utf8'));
-  dom.window.confirm = () => true;
+  const css = readFileSync(new URL('../src/options/index.css', import.meta.url), 'utf8');
+  const style = dom.window.document.createElement('style');
+  style.textContent = css;
+  dom.window.document.head.append(style);
+  mockDialog(dom);
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   let storageSets = 0;
@@ -25,7 +41,67 @@ test('編集とリスト操作は保存ボタンまで反映せず、保存時�
   try {
     await import(`../src/options/index.js?stale=${Date.now()}`);
     await new Promise(resolve => setTimeout(resolve, 0));
+    assert.ok(document.querySelector('#confirmDialog button[autofocus]'));
     assert.equal(document.getElementById('panel-usage').hidden, false);
+    for (const button of document.querySelectorAll('[data-reset-group]')) {
+      assert.equal(button.hidden, false);
+      assert.equal(button.classList.contains('is-default'), true);
+      assert.equal(button.disabled, true);
+      assert.equal(button.getAttribute('aria-hidden'), 'true');
+    }
+    assert.equal(document.querySelector('.save-links a[href="https://forms.gle/4CB9upXFC3STrus16"]')?.textContent, '報告・要望');
+    assert.equal(document.getElementById('closeWithoutSaving').querySelector('.button-icon'), null);
+    const optionsCss = readFileSync(new URL('../src/options/index.css', import.meta.url), 'utf8');
+    assert.match(optionsCss, /\.rule-condition textarea\s*\{[^}]*resize:\s*none/s);
+    assert.doesNotMatch(optionsCss, /gap:\s*24px 12px/);
+    assert.match(optionsCss, /p\[data-group\]\[data-editing="false"\]:has\(input\[type="checkbox"\]:not\(:checked\)\)[\s\S]*?textarea, \.rule-condition-text\) \{ background: transparent/);
+    assert.match(optionsCss, /\.rule-condition-text:hover \{ color: var\(--blue\); background: #f4f8ff/);
+    assert.match(optionsCss, /grid-template-columns: 36px 8px minmax\(0, 1fr\) 24px 224px 24px 42px/);
+    assert.match(optionsCss, /\.rule-drag-handle \{[^}]*align-self: stretch;[^}]*width: 36px/s);
+    assert.match(optionsCss, /body:has\(#enabled:not\(:checked\)\)[\s\S]*\.rule-drag-clone \.rule-enabled input/);
+    assert.equal(document.querySelectorAll('[title]').length, 0);
+    const filterStatus = document.getElementById('filterStatus');
+    const filterStatusCollapse = filterStatus.closest('.filter-status-collapse');
+    assert.equal(filterStatus.parentElement.className, 'filter-status-clip');
+    assert.equal(filterStatusCollapse.getAttribute('aria-hidden'), 'true');
+    assert.equal(filterStatus.querySelector('.filter-status-mark').textContent, '!');
+    assert.equal(document.querySelector('.save-links a[href="https://github.com/midorisawa/Shirakawa"]').dataset.tooltip, 'リポジトリを見る');
+    assert.equal(document.querySelector('.save-links a[href="https://forms.gle/4CB9upXFC3STrus16"]').dataset.tooltip, 'バグや欲しい機能');
+    assert.match(optionsCss, /\.filter-status-collapse\s*\{[^}]*grid-template-rows:\s*0fr/);
+    assert.match(optionsCss, /\.filter-status-collapse\.is-visible\s*\{[^}]*grid-template-rows:\s*1fr/);
+    assert.match(optionsCss, /\.filter-status-clip\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden/s);
+    filterStatusCollapse.classList.add('is-visible');
+    const priorityNotice = document.querySelector('#panel-rules .priority-notice');
+    const filterNoticeStyle = dom.window.getComputedStyle(filterStatus);
+    const priorityNoticeStyle = dom.window.getComputedStyle(priorityNotice);
+    assert.equal(filterNoticeStyle.marginTop, '8px');
+    assert.equal(filterNoticeStyle.marginBottom, '4px');
+    assert.equal(priorityNoticeStyle.marginBottom, '8px');
+    assert.equal(filterNoticeStyle.fontSize, '13px');
+    assert.equal(filterNoticeStyle.backgroundColor, 'rgb(251, 248, 242)');
+    assert.equal(filterNoticeStyle.borderTopColor, 'rgb(234, 223, 202)');
+    assert.equal(filterNoticeStyle.color, 'rgb(92, 85, 73)');
+    assert.notEqual(filterNoticeStyle.backgroundColor, priorityNoticeStyle.backgroundColor);
+    filterStatusCollapse.classList.remove('is-visible');
+    assert.match(optionsCss, /#saveState:empty, #status:empty \{ display: none; \}/);
+    assert.match(optionsCss, /tab-panel-fade 180ms ease-out/);
+    assert.match(optionsCss, /tab-panel-fade \{ from \{ opacity: \.94; \} to \{ opacity: 1; \}/);
+    assert.match(optionsCss, /\.settings-tabs:has\(#tab-rules\[aria-selected="true"\]\)::after \{ transform: translateX\(200%\); \}/);
+    assert.match(optionsCss, /\.settings-tabs::after[^}]*transition: transform 280ms/s);
+    assert.match(optionsCss, /button:not\(:disabled\):hover/);
+    assert.match(optionsCss, /\.button-primary:not\(:disabled\):hover/);
+    assert.match(optionsCss, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\[role="tabpanel"\]\.tab-panel-fade \{ animation: none; \}/);
+    assert.match(optionsCss, /\.settings-tabs\s*\{[^}]*padding-top:\s*2px/s);
+    const interactionRow = document.querySelector('#rules [data-group]');
+    const interactionSwitch = interactionRow.querySelector('.rule-enabled input');
+    assert.equal(interactionRow.querySelector('.rule-remove').dataset.tooltip, undefined);
+    assert.equal(interactionRow.querySelector('.rule-enabled').hasAttribute('data-tip'), false);
+    assert.equal(dom.window.getComputedStyle(interactionRow.querySelector('.rule-remove')).visibility, 'hidden');
+    assert.equal(document.getElementById('resetInputPrice').dataset.tooltip.startsWith('初期値：'), true);
+    assert.equal(document.querySelector('.save-links a[aria-label]')?.getAttribute('aria-label'), 'GitHubで使い方・ソースコードを見る');
+    assert.match(readFileSync(new URL('../src/options/index.js', import.meta.url), 'utf8'), /transient && message[\s\S]*5000/);
+    assert.doesNotMatch(optionsCss, /\[data-enabled="false"\]/);
+    assert.equal(document.querySelector('[data-group="black"]').dataset.enabled, String(DEFAULT_CONFIG.blackRules[0].enabled));
     const modelInput = document.getElementById('model');
     const originalModel = modelInput.value;
     assert.equal(document.getElementById('save').disabled, true);
@@ -77,74 +153,184 @@ test('編集とリスト操作は保存ボタンまで反映せず、保存時�
     assert.equal(document.getElementById('apiKeyRow').hidden, true);
     assert.equal(document.getElementById('keyStatus').textContent, '保存済み');
     assert.match(document.querySelector('#rules h3').textContent, /ブラックリスト/);
-    const slider = document.querySelector('[data-group="black"] [data-field="threshold"]');
-    assert.equal(slider.type, 'range');
+    const score = document.querySelector('[data-group="black"] .threshold-value');
+    assert.equal(dom.window.getComputedStyle(score).marginInline, '4px');
+    assert.equal(document.querySelectorAll('.rule-actions[hidden]').length, 0);
+    assert.equal(document.querySelector('[data-group="black"] .threshold-summary').hasAttribute('title'), false);
+    assert.equal(dom.window.getComputedStyle(document.querySelector('[data-group="black"] .threshold-summary')).alignItems, 'center');
+    assert.equal(dom.window.getComputedStyle(document.querySelector('[data-group="black"] .threshold-copy')).display, 'block');
+    assert.equal(dom.window.getComputedStyle(document.querySelector('[data-group="black"] .threshold-summary')).minHeight, '54px');
+    assert.equal(dom.window.getComputedStyle(document.querySelector('[data-group="black"] .threshold-summary')).paddingBottom, '22px');
+    assert.equal(dom.window.getComputedStyle(document.querySelector('[data-group="black"] .threshold-slider')).position, 'absolute');
+    assert.match(optionsCss, /:where\(\[data-editing="false"\]:has\(input\[type="checkbox"\]:not\(:checked\)\)\) \.threshold-value \{ color: #80868b; \}/);
+    assert.doesNotMatch(optionsCss, /\.rule-threshold:hover/);
+    assert.equal(dom.window.getComputedStyle(document.querySelector('[data-reset-group="black"]')).height, '32px');
+    const disabledRow = [...document.querySelectorAll('#rules [data-group]')].find(row => !row.querySelector('.rule-enabled input').checked);
+    assert.equal(dom.window.getComputedStyle(disabledRow.querySelector('.threshold-value')).color, 'rgb(128, 134, 139)');
+    const disabledRemove = disabledRow.querySelector('.rule-remove');
+    disabledRow.dataset.emptyCondition = 'true';
+    assert.equal(dom.window.getComputedStyle(disabledRemove).color, 'rgb(197, 34, 31)');
+    assert.match(optionsCss, /\.rule-group > p\[data-group\] > \.rule-remove:hover \{ color: #fff; background: #c5221f; border-color: #c5221f; \}/);
+    delete disabledRow.dataset.emptyCondition;
     const savesBeforeDrag = storageSets;
-    slider.value = '0.836';
+    const slider = document.querySelector('[data-group="black"] [data-field="threshold-range"]');
+    assert.equal(dom.window.getComputedStyle(document.querySelector('[data-group="black"] .threshold-slider')).display, 'flex');
+    assert.equal(dom.window.getComputedStyle(document.querySelector('[data-group="black"] .threshold-slider')).visibility, 'visible');
+    assert.equal(dom.window.getComputedStyle(document.querySelector('[data-group="black"] .rule-remove')).visibility, 'hidden');
+    assert.match(document.querySelector('[data-group="black"] .threshold-copy').textContent, /^スコア0\.90以上の投稿を非表示$/);
+    slider.value = '0.91';
     slider.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-    assert.equal(slider.closest('.rule-threshold').querySelector('output').value, '0.84');
-    assert.equal(storageSets, savesBeforeDrag);
     slider.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+    assert.equal(score.textContent, '0.91');
+    assert.equal(storageSets, savesBeforeDrag);
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(storageSets, savesBeforeDrag);
     assert.equal(document.getElementById('saveState').textContent, '未保存の変更があります');
     document.getElementById('save').click();
     await new Promise(resolve => setTimeout(resolve, 0));
-    assert.equal(savedConfig.blackRules[0].threshold, 0.84);
+    assert.equal(savedConfig.blackRules[0].threshold, 0.91);
     assert.equal(document.getElementById('saveState').textContent, '');
-    document.querySelector('[data-edit-group="black"]').click();
-    assert.equal(document.querySelector('[data-group="black"] textarea').hidden, false);
+    const textareaFocusOptions = [];
+    const originalTextareaFocus = dom.window.HTMLTextAreaElement.prototype.focus;
+    dom.window.HTMLTextAreaElement.prototype.focus = function (options) { textareaFocusOptions.push(options); return originalTextareaFocus.call(this, options); };
+    document.querySelector('[data-group="black"] [data-edit-rule]').click();
+    assert.equal(document.querySelector('[data-group="black"] textarea:not([hidden])').hidden, false);
+    assert.equal(document.querySelectorAll('[data-group="black"] textarea:not([hidden])').length, 1);
+    assert.ok(document.querySelector('[data-group="black"] input[type="range"]'));
+    assert.equal(document.querySelector('[data-group="black"] .threshold-value').hidden, false);
+    assert.equal(document.activeElement, document.querySelector('[data-group="black"] textarea:not([hidden])'));
+    assert.deepEqual(textareaFocusOptions.at(-1), { preventScroll: true });
+    const focusedRow = document.querySelector('[data-group="black"][data-editing="true"]');
+    assert.equal(dom.window.getComputedStyle(focusedRow.querySelector('.rule-enabled')).visibility, 'hidden');
+    assert.equal(dom.window.getComputedStyle(focusedRow.querySelector('.rule-remove')).visibility, 'visible');
+    const editingTextarea = document.querySelector('[data-group="black"] textarea:not([hidden])');
+    assert.equal(editingTextarea.selectionStart, editingTextarea.value.length);
+    assert.equal(editingTextarea.selectionEnd, editingTextarea.value.length);
+    const originalCondition = editingTextarea.value;
+    editingTextarea.value += '追記';
+    editingTextarea.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    assert.equal(document.querySelector('[data-reset-group="black"]').hidden, false);
+    editingTextarea.value = originalCondition;
+    editingTextarea.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    assert.equal(document.querySelector('[data-reset-group="black"]').hidden, false);
+    const otherRowSwitch = document.querySelector('[data-group="black"] .rule-enabled:not([hidden]) input');
+    const switchBefore = otherRowSwitch.checked;
+    otherRowSwitch.click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(otherRowSwitch.checked, !switchBefore);
+    assert.equal(document.querySelector('[data-group="black"][data-editing="true"]'), null);
+    document.querySelector('[data-group="black"] [data-edit-rule]').click();
     const blackIdsBeforeReorder = [...document.querySelectorAll('[data-group="black"]')].slice(0, 2).map(row => row.dataset.id);
     const firstHandle = document.querySelector('[data-group="black"] .rule-drag-handle');
     firstHandle.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true, bubbles: true }));
     const blackIdsAfterReorder = [...document.querySelectorAll('[data-group="black"]')].slice(0, 2).map(row => row.dataset.id);
     assert.deepEqual(blackIdsAfterReorder, [...blackIdsBeforeReorder].reverse());
     assert.equal(document.getElementById('saveState').textContent, '未保存の変更があります');
-    const blackRows = [...document.querySelectorAll('[data-group="black"]')];
-    blackRows.forEach((row, index) => Object.defineProperty(row, 'getBoundingClientRect', { configurable: true, value: () => ({ left: 0, right: 700, top: 100 + index * 80, bottom: 180 + index * 80, height: 80, width: 700 }) }));
     const pointerEvent = (type, values = {}) => {
       const event = new dom.window.Event(type, { bubbles: true, cancelable: true });
       for (const [key, value] of Object.entries({ button: 0, pointerId: 7, clientX: 20, clientY: 100, ...values })) Object.defineProperty(event, key, { value });
       return event;
     };
-    const handle = blackRows[0].querySelector('.rule-drag-handle');
+    const deleteRow = document.querySelector('[data-group="black"]:not([data-editing="true"])');
+    const deleteId = deleteRow.dataset.id;
+    const deleteSwitch = deleteRow.querySelector('.rule-enabled input');
+    const enabledBeforeDelete = deleteSwitch.checked;
+    deleteRow.querySelector('[data-edit-rule]').click();
+    const editingDeleteRow = document.querySelector(`[data-group="black"][data-id="${deleteId}"]`);
+    const deleteTextarea = editingDeleteRow.querySelector('textarea:not([hidden])');
+    const removeButton = editingDeleteRow.querySelector('.rule-remove');
+    assert.equal(document.activeElement, deleteTextarea);
+    assert.equal(dom.window.getComputedStyle(removeButton).visibility, 'visible');
+    const removePointerDown = pointerEvent('pointerdown');
+    removeButton.dispatchEvent(removePointerDown);
+    assert.equal(removePointerDown.defaultPrevented, true);
+    assert.equal(document.activeElement, deleteTextarea);
+    assert.equal(deleteSwitch.checked, enabledBeforeDelete);
+    removeButton.click();
+    assert.equal(document.querySelector(`[data-group="black"][data-id="${deleteId}"]`), null);
+    const blackRows = [...document.querySelectorAll('[data-group="black"]')];
+    blackRows.forEach((row, index) => Object.defineProperty(row, 'getBoundingClientRect', { configurable: true, value: () => ({ left: 0, right: 700, top: 100 + index * 80, bottom: 180 + index * 80, height: 80, width: 700 }) }));
+    const handle = document.querySelector('[data-group="black"] .rule-drag-handle');
     const blackOrderBeforePointer = blackRows.map(row => row.dataset.id);
-    handle.dispatchEvent(pointerEvent('pointerdown'));
-    handle.dispatchEvent(pointerEvent('pointermove', { clientY: 220 }));
+    const uncheckedRow = blackRows.find(row => !row.querySelector('.rule-enabled input').checked);
+    let draggedThresholdId;
+    let dragHandle = uncheckedRow?.querySelector('.rule-drag-handle') ?? handle;
+    let activeDragRow = uncheckedRow;
+    if (uncheckedRow) {
+      const uncheckedId = uncheckedRow.dataset.id;
+      draggedThresholdId = uncheckedId;
+      const editingRow = document.querySelector(`[data-group="black"][data-id="${uncheckedId}"]`);
+      activeDragRow = editingRow;
+      dragHandle = editingRow.querySelector('.rule-drag-handle');
+      const dragSlider = editingRow.querySelector('[data-field="threshold-range"]');
+      dragSlider.value = '0.73';
+      dragSlider.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+      assert.equal(dom.window.getComputedStyle(editingRow.querySelector('.threshold-slider')).visibility, 'visible');
+    }
+    dragHandle.dispatchEvent(pointerEvent('pointerdown'));
+    dragHandle.dispatchEvent(pointerEvent('pointermove', { clientY: 350 }));
     assert.equal(document.querySelector('.rule-drag-clone')?.getAttribute('aria-hidden'), 'true');
-    handle.dispatchEvent(pointerEvent('pointerup', { clientY: 220 }));
+    assert.equal(dom.window.getComputedStyle(document.querySelector('.rule-drag-clone .rule-remove')).display, 'none');
+    if (uncheckedRow) {
+      assert.equal(document.querySelector('.rule-drag-clone [data-field="threshold"]').value, '0.73');
+      assert.equal(dom.window.getComputedStyle(document.querySelector('.rule-drag-clone .threshold-slider')).visibility, 'visible');
+    }
+    if (uncheckedRow) {
+      assert.equal(document.querySelector('.rule-drag-clone .rule-enabled input').checked, false);
+    }
+    dragHandle.dispatchEvent(pointerEvent('pointerup', { clientY: 350 }));
     const reorderedIds = [...document.querySelectorAll('[data-group="black"]')].map(row => row.dataset.id);
     assert.notDeepEqual(reorderedIds, blackOrderBeforePointer);
+    if (draggedThresholdId) {
+      assert.equal(document.querySelector(`[data-group="black"][data-id="${draggedThresholdId}"] [data-field="threshold"]`).value, '0.73');
+      document.getElementById('save').click();
+      await new Promise(resolve => setTimeout(resolve, 0));
+      assert.equal(savedConfig.blackRules.find(rule => rule.id === draggedThresholdId).threshold, 0.73);
+    }
     const cancelHandle = document.querySelector('[data-group="black"] .rule-drag-handle');
     cancelHandle.dispatchEvent(pointerEvent('pointerdown', { pointerId: 8 }));
-    cancelHandle.dispatchEvent(pointerEvent('pointermove', { pointerId: 8, clientY: 220 }));
-    cancelHandle.dispatchEvent(pointerEvent('pointercancel', { pointerId: 8, clientY: 220 }));
+    cancelHandle.dispatchEvent(pointerEvent('pointermove', { pointerId: 8, clientY: 350 }));
+    cancelHandle.dispatchEvent(pointerEvent('pointercancel', { pointerId: 8, clientY: 350 }));
     assert.equal(document.querySelector('.rule-drag-clone'), null);
     assert.deepEqual([...document.querySelectorAll('[data-group="black"]')].map(row => row.dataset.id), reorderedIds);
-    const draftCondition = document.querySelector('[data-group="black"] textarea');
-    draftCondition.value = '破棄される編集中の条件';
+    document.querySelector('[data-group="black"] [data-edit-rule]').click();
+    const draftRow = document.querySelector('[data-group="black"][data-editing="true"]');
+    const draftCondition = draftRow.querySelector('textarea');
+    draftCondition.value = 'ドラフトを保持する条件';
     draftCondition.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
-    document.querySelector('[data-edit-group="black"]').click();
-    assert.equal(document.querySelector('[data-group="black"] textarea').hidden, true);
-    assert.deepEqual([...document.querySelectorAll('[data-group="black"]')].slice(0, 2).map(row => row.dataset.id), blackIdsBeforeReorder);
-    assert.notEqual(document.querySelector('[data-group="black"] .rule-condition-text').textContent, '破棄される編集中の条件');
+    document.getElementById('saveState').click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(document.querySelector('[data-group="black"] textarea:not([hidden])'), null);
+    assert.equal(document.querySelector(`[data-group="black"][data-id="${draftRow.dataset.id}"] .rule-condition-text`).textContent, 'ドラフトを保持する条件');
     const savesBeforeEdits = storageSets;
-    document.querySelector('[data-edit-group="black"]').click();
+    document.querySelector('[data-group="black"] [data-edit-rule]').click();
     document.querySelector('[data-add-group="black"]').click();
     const newCondition = [...document.querySelectorAll('[data-field="condition"]')].findLast(node => node.closest('p')?.dataset.group === 'black');
     assert.equal(newCondition.value, '');
+    const newRow = newCondition.closest('[data-group]');
+    assert.equal(newRow.dataset.emptyCondition, 'true');
+    assert.equal(dom.window.getComputedStyle(newRow.querySelector('.rule-enabled')).visibility, 'hidden');
+    assert.equal(dom.window.getComputedStyle(newRow.querySelector('.rule-remove')).visibility, 'visible');
+    assert.equal(dom.window.getComputedStyle(newRow.querySelector('.rule-remove')).color, 'rgb(197, 34, 31)');
+    assert.equal(document.activeElement, newCondition);
+    assert.equal(newCondition.selectionStart, newCondition.value.length);
     assert.equal(newCondition.placeholder, '例：攻撃的な表現を含む投稿');
     document.getElementById('save').click();
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(storageSets, savesBeforeEdits);
     assert.match(document.getElementById('status').textContent, /空の条件は保存できません/);
-    assert.equal(document.querySelector('[data-group="black"] textarea').hidden, false);
+    assert.equal(document.querySelector('[data-group="black"][data-editing="true"] textarea').hidden, false);
     newCondition.value = '保存される条件';
     newCondition.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    newCondition.blur();
+    assert.equal(newRow.dataset.emptyCondition, 'false');
+    assert.equal(dom.window.getComputedStyle(newRow.querySelector('.rule-enabled')).visibility, 'visible');
+    assert.equal(dom.window.getComputedStyle(newRow.querySelector('.rule-remove')).visibility, 'hidden');
     document.getElementById('save').click();
     await new Promise(resolve => setTimeout(resolve, 0));
-    assert.equal(document.querySelector('[data-group="black"] textarea').hidden, true);
-    document.querySelector('[data-edit-group="black"]').click();
+    assert.equal(document.querySelector('[data-group="black"] [data-editing="true"]'), null);
+    const initiallyDisabledRule = DEFAULT_CONFIG.blackRules.find(rule => !rule.enabled);
+    assert.equal(savedConfig.blackRules.find(rule => rule.id === initiallyDisabledRule.id).enabled, false);
     document.getElementById('model').value = 'custom-model';
     document.getElementById('reset-black').click();
     document.getElementById('reset-white').click();
@@ -192,6 +378,53 @@ test('編集とリスト操作は保存ボタンまで反映せず、保存時�
   }
 });
 
+test('条件の削除アニメーション後も行がDOMと保存データから消える', async () => {
+  const previous = { document: globalThis.document, window: globalThis.window, chrome: globalThis.chrome, getComputedStyle: globalThis.getComputedStyle };
+  const dom = new JSDOM(readFileSync(new URL('../src/options/index.html', import.meta.url), 'utf8'));
+  globalThis.document = dom.window.document;
+  globalThis.window = dom.window;
+  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
+  mockDialog(dom);
+  dom.window.matchMedia = () => ({ matches: false });
+  const animationOptions = [];
+  dom.window.HTMLElement.prototype.animate = function (_frames, options) { animationOptions.push(options); return { finished: new Promise(resolve => setTimeout(resolve, 0)), cancel() {} }; };
+  let savedConfig;
+  globalThis.chrome = { storage: {}, runtime: { sendMessage: async message => {
+    if (message.type === 'get-config') return { ...DEFAULT_CONFIG, keyConfigured: true };
+    if (message.type === 'get-usage') return { inputTokens: 0, unreportedRequests: 0, periods: {} };
+    if (message.type === 'get-cache-size') return { bytes: 0 };
+    if (message.type === 'save-config') { savedConfig = message.config; return { ok: true }; }
+    return { ok: true };
+  } } };
+  const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+  try {
+    await import(`../src/options/index.js?delete-animation=${Date.now()}`);
+    await tick();
+    const row = document.querySelector('#rules [data-group="black"]');
+    const deletedId = row.dataset.id;
+    row.querySelector('.rule-remove').click();
+    assert.equal(row.isConnected, true);
+    assert.equal(dom.window.matchMedia('(prefers-reduced-motion: reduce)').matches, false);
+    await tick();
+    await tick();
+    assert.equal(animationOptions[0].fill, 'forwards');
+    assert.equal(animationOptions.length, 2);
+    assert.equal(document.querySelector(`#rules [data-id="${deletedId}"]`), null);
+    assert.equal(document.getElementById('save').disabled, false);
+    document.getElementById('save').click();
+    await tick();
+    await tick();
+    assert.equal(savedConfig.blackRules.some(rule => rule.id === deletedId), false);
+    assert.equal(document.querySelector(`#rules [data-id="${deletedId}"]`), null);
+  } finally {
+    dom.window.close();
+    if (previous.document === undefined) delete globalThis.document; else globalThis.document = previous.document;
+    if (previous.window === undefined) delete globalThis.window; else globalThis.window = previous.window;
+    if (previous.chrome === undefined) delete globalThis.chrome; else globalThis.chrome = previous.chrome;
+    if (previous.getComputedStyle === undefined) delete globalThis.getComputedStyle; else globalThis.getComputedStyle = previous.getComputedStyle;
+  }
+});
+
 test('削除・リセット操作は保存時まで送信せず、確認キャンセルと部分失敗を保持する', async () => {
   const previous = { document: globalThis.document, window: globalThis.window, chrome: globalThis.chrome };
   const dom = new JSDOM(readFileSync(new URL('../src/options/index.html', import.meta.url), 'utf8'));
@@ -201,7 +434,7 @@ test('削除・リセット操作は保存時まで送信せず、確認キャ�
   let cacheFailures = 1;
   let confirmMessage = '';
   const messages = [];
-  dom.window.confirm = message => { confirmMessage = message; return confirmResult; };
+  mockDialog(dom, message => { confirmMessage = message; return confirmResult; });
   globalThis.chrome = {
     storage: {},
     runtime: { sendMessage: async message => {
@@ -209,6 +442,7 @@ test('削除・リセット操作は保存時まで送信せず、確認キャ�
       if (message.type === 'get-config') return { ...DEFAULT_CONFIG, keyConfigured: true, keyConfiguredByProvider: { typesafe: true, openrouter: false } };
       if (message.type === 'get-usage') return { inputTokens: 0, unreportedRequests: 0, periods: {} };
       if (message.type === 'get-cache-size') return { bytes: 0 };
+      if (message.type === 'reset-usage' || message.type === 'reset-all-usage') return { ok: true, inputTokens: 0, unreportedRequests: 0, periods: {} };
       if (message.type === 'clear-cache' && cacheFailures-- > 0) return { ok: false };
       return { ok: true };
     } }
@@ -249,6 +483,8 @@ test('削除・リセット操作は保存時まで送信せず、確認キャ�
     assert.equal(messages.filter(message => message.type === 'reset-all-usage').length, 1);
     assert.equal(messages.filter(message => message.type === 'delete-api-key').length, 1);
     assert.match($('status').textContent, /一部の操作に失敗/);
+    assert.doesNotMatch($('status').textContent, /使用量リセット/);
+    assert.doesNotMatch($('status').textContent, /すべての使用量リセット/);
     $('save').click();
     await tick();
     assert.equal(messages.filter(message => message.type === 'clear-cache').length, 2);
@@ -257,11 +493,40 @@ test('削除・リセット操作は保存時まで送信せず、確認キャ�
     assert.equal(messages.filter(message => message.type === 'delete-api-key').length, 1);
     assert.match($('status').textContent, /設定を保存しました$/);
     assert.equal($('save').disabled, true);
+    assert.equal($('resetInputPrice').hidden, false);
+    assert.equal($('resetInputPrice').classList.contains('is-default'), true);
+    assert.equal($('resetInputPrice').disabled, true);
     $('resetInputPrice').click();
+    assert.equal($('save').disabled, true);
     assert.equal(messages.filter(message => message.type === 'save-config').length, 2);
-    $('save').click();
-    await tick();
-    assert.equal(messages.filter(message => message.type === 'save-config').length, 3);
+  } finally {
+    dom.window.close();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+  }
+});
+
+test('確認後に再表示してEscapeで閉じると承認状態を引き継がない', async () => {
+  const previous = { document: globalThis.document, window: globalThis.window, chrome: globalThis.chrome };
+  const dom = new JSDOM(readFileSync(new URL('../src/options/index.html', import.meta.url), 'utf8'));
+  mockDialog(dom, (() => { const results = ['confirm', 'escape']; return () => results.shift(); })());
+  globalThis.document = dom.window.document;
+  globalThis.window = dom.window;
+  let saves = 0;
+  globalThis.chrome = { storage: {}, runtime: { sendMessage: async message => { if (message.type === 'get-config') return { ...DEFAULT_CONFIG, inputPricePerMillion: 0.5, keyConfigured: true }; if (message.type === 'save-config') saves++; return { ok: true }; } } };
+  try {
+    await import(`../src/options/index.js?dialog-repeat=${Date.now()}`);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    document.getElementById('resetUsage').click();
+    document.getElementById('save').click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(saves, 1);
+    document.getElementById('resetInputPrice').click();
+    document.getElementById('save').click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(saves, 1);
+    assert.match(document.getElementById('status').textContent, /実行せず/);
   } finally {
     dom.window.close();
     for (const [key, value] of Object.entries(previous)) {
@@ -275,7 +540,7 @@ test('保存した単価で使用額を再計算し、編集中は保存済み�
   const originalWindow = globalThis.window;
   const originalChrome = globalThis.chrome;
   const dom = new JSDOM(readFileSync(new URL('../src/options/index.html', import.meta.url), 'utf8'));
-  dom.window.confirm = () => true;
+  mockDialog(dom);
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
   const config = { ...DEFAULT_CONFIG, inputPricePerMillion: 2, billingCurrency: 'USD', usageLimits: { '5h': 2, '1d': null, '7d': null, '30d': null } };
@@ -423,6 +688,19 @@ test('初回キー保存と接続先別の保存状態を表示し、不正な�
     assert.match($('status').textContent, /切り替えを保存できません/);
     assert.equal($('save').disabled, false);
     failSave = false;
+    $('enabled').click();
+    await tick();
+    assert.equal(messages.filter(message => message.type === 'save-config').at(-1).config.enabled, false);
+    $('model').value = 'changed-while-disabled';
+    $('model').dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    $('save').click();
+    await tick();
+    assert.equal(messages.filter(message => message.type === 'save-config').at(-1).config.enabled, false);
+    $('enabled').click();
+    await tick();
+    const reenabledConfig = messages.filter(message => message.type === 'save-config').at(-1).config;
+    assert.equal(reenabledConfig.enabled, true);
+    assert.equal(reenabledConfig.model, 'changed-while-disabled');
     while (document.querySelector('[data-remove-limit]')) document.querySelector('[data-remove-limit]').click();
     $('save').click();
     await tick();

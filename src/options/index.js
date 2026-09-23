@@ -5,16 +5,36 @@ let verificationResult = null;
 let keyEditing = false;
 let appliedConfig = structuredClone(DEFAULT_CONFIG);
 let saving = false;
-const ruleEditMode = { black: false, white: false };
-const ruleEditSnapshots = { black: null, white: null };
-const ruleEditPendingSnapshots = { black: false, white: false };
+let activeRule = null;
 let activeDrag = null;
 const pendingActions = { cache: false, usage: false, allUsage: false, blackReset: false, whiteReset: false, priceReset: false, apiKeyDelete: new Set() };
 const scheduleFrame = callback => (window.requestAnimationFrame ? window.requestAnimationFrame(callback) : window.setTimeout(callback, 16));
 const cancelFrame = id => (window.cancelAnimationFrame ? window.cancelAnimationFrame(id) : window.clearTimeout(id));
 const $ = id => document.getElementById(id);
-const status = message => { $('status').textContent = message; $('status').dataset.error = /できません|失敗|保存されていません/.test(message); };
+let statusTimer = 0;
+const status = (message, transient = true) => {
+  if (statusTimer) window.clearTimeout(statusTimer);
+  $('status').textContent = message;
+  $('status').dataset.error = /できません|失敗|保存されていません/.test(message);
+  if (transient && message) statusTimer = window.setTimeout(() => { $('status').textContent = ''; $('status').dataset.error = 'false'; statusTimer = 0; }, 5000);
+};
 const keyStatus = message => { $('keyStatus').textContent = message; };
+let confirmationPending = false;
+function confirmInPage(message, actionLabel = '続ける') {
+  if (confirmationPending) return Promise.resolve(false);
+  confirmationPending = true;
+  const dialog = $('confirmDialog');
+  $('confirmMessage').textContent = message;
+  $('confirmAction').textContent = actionLabel;
+  return new Promise(resolve => {
+    dialog.returnValue = '';
+    dialog.addEventListener('close', () => {
+      confirmationPending = false;
+      resolve(dialog.returnValue === 'confirm');
+    }, { once: true });
+    dialog.showModal();
+  });
+}
 const toggleMotionTimers = new WeakMap();
 let activePanelId = document.querySelector('[role="tab"][aria-selected="true"]')?.getAttribute('aria-controls') ?? null;
 function clearToggleMotion(input) {
@@ -38,12 +58,12 @@ function animateToggle(input) {
 }
 const buttonIcons = { edit:'ic_fluent_edit_24_regular.svg', discard:'ic_fluent_arrow_reset_24_regular.svg', reset:'ic_fluent_arrow_reset_24_regular.svg', trash:'ic_fluent_delete_24_regular.svg', dismiss:'ic_fluent_game_controller_button_x_20_regular.svg', save:'ic_fluent_save_24_regular.svg', plus:'M12 5v14m-7-7h14', check:'m5 12 4 4L19 6', download:'M12 4v11m0 0 4-4m-4 4-4-4M5 20h14', upload:'M12 16V5m0 0 4 4m-4-4-4 4M5 20h14' };
 function buttonIconKey(button) {
-  if (button.dataset.editGroup) return button.getAttribute('aria-pressed') === 'true' ? 'discard' : 'edit';
   if (button.dataset.resetGroup || ['resetInputPrice', 'resetUsage', 'resetAllUsage'].includes(button.id)) return 'reset';
-  if (button.dataset.remove || button.dataset.removeLimit) return 'dismiss';
+  if (button.dataset.remove) return 'trash';
+  if (button.dataset.removeLimit) return 'dismiss';
   if (button.dataset.addGroup || button.id === 'addUsageLimit') return 'plus';
   if (['save', 'saveApiKey'].includes(button.id)) return 'save';
-  if (['closeWithoutSaving', 'cancelApiKey', 'cancelUsageLimit'].includes(button.id)) return 'discard';
+  if (['cancelApiKey', 'cancelUsageLimit'].includes(button.id)) return 'discard';
   if (button.classList.contains('file-control')) return 'upload';
   if (button.id === 'changeApiKey') return 'edit';
   if (['clearCache', 'deleteApiKey'].includes(button.id)) return 'trash';
@@ -76,6 +96,10 @@ function decorateButtons() {
       svg.append(path); button.prepend(svg);
     }
   }
+  for (const element of document.querySelectorAll('[title]')) {
+    if (!element.dataset.tooltip) element.dataset.tooltip = element.title;
+    element.removeAttribute('title');
+  }
 }
 const hasSavedKey = () => Boolean(config.keyConfiguredByProvider?.[config.provider] ?? config.keyConfigured);
 function markDirty() {
@@ -84,6 +108,34 @@ function markDirty() {
 }
 function updateDirtyState() {
   read();
+  const sameRules = (left, right) => JSON.stringify(left.map(({ condition, threshold, enabled }) => [condition, Number(threshold), Boolean(enabled)])) === JSON.stringify(right.map(({ condition, threshold, enabled }) => [condition, Number(threshold), Boolean(enabled)]));
+  for (const group of ['black', 'white']) {
+    const resetButton = document.querySelector(`[data-reset-group="${group}"]`);
+    const key = `${group}Rules`;
+    if (resetButton) {
+      const isDefault = sameRules(config[key], DEFAULT_CONFIG[key]);
+      resetButton.hidden = false;
+      resetButton.classList.toggle('is-default', isDefault);
+      resetButton.disabled = isDefault;
+      resetButton.setAttribute('aria-hidden', String(isDefault));
+    }
+    if (pendingActions[`${group}Reset`] && sameRules(config[key], appliedConfig[key])) pendingActions[`${group}Reset`] = false;
+  }
+  const defaultConfig = normalizeConfig(DEFAULT_CONFIG);
+  const resetInputPrice = $('resetInputPrice');
+  const samePriceSettings = (left, right) => {
+    const current = normalizeConfig(left);
+    const target = normalizeConfig(right);
+    return JSON.stringify([current.inputPricePerMillion, current.billingCurrency, current.usageLimits]) === JSON.stringify([target.inputPricePerMillion, target.billingCurrency, target.usageLimits]);
+  };
+  if (resetInputPrice) {
+    const isDefault = samePriceSettings(config, defaultConfig);
+    resetInputPrice.hidden = false;
+    resetInputPrice.classList.toggle('is-default', isDefault);
+    resetInputPrice.disabled = isDefault;
+    resetInputPrice.setAttribute('aria-hidden', String(isDefault));
+  }
+  if (pendingActions.priceReset && samePriceSettings(config, appliedConfig)) pendingActions.priceReset = false;
   const priceInput = $('inputPricePerMillion');
   if ($('zeroPriceWarning')) $('zeroPriceWarning').hidden = !priceInput || priceInput.value === '' || Number(priceInput.value) !== 0;
   const comparable = value => {
@@ -123,6 +175,12 @@ function revealField(input) {
   if (details) details.open = true;
   input.focus();
 }
+function focusConditionTextarea(group, id) {
+  const textarea = document.querySelector(`[data-group="${group}"][data-id="${id}"] textarea`);
+  if (!textarea) return;
+  textarea.focus({ preventScroll: true });
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+}
 for (const tab of document.querySelectorAll('[role="tab"]')) {
   tab.addEventListener('click', () => activateTab(tab.getAttribute('aria-controls')));
   tab.addEventListener('keydown', event => {
@@ -137,8 +195,14 @@ for (const tab of document.querySelectorAll('[role="tab"]')) {
 }
 function renderFilterStatus() {
   const configured = Boolean(config.keyConfiguredByProvider?.[appliedConfig.provider]);
-  if ($('filterStatus')) $('filterStatus').textContent = appliedConfig.enabled && !configured ? 'APIキーが未設定のため、フィルターを有効にしても判定できません。API接続を設定してください。' : '';
-  if ($('filterStatus')) $('filterStatus').hidden = appliedConfig.enabled && configured || !appliedConfig.enabled;
+  const notice = $('filterStatus');
+  const visible = appliedConfig.enabled && !configured;
+  if (notice) {
+    $('filterStatusText').textContent = visible ? 'APIキーが未設定のため、フィルターを有効にしても判定できません。API接続を設定してください。' : '';
+    const collapse = notice.closest('.filter-status-collapse');
+    collapse.classList.toggle('is-visible', visible);
+    collapse.setAttribute('aria-hidden', String(!visible));
+  }
 }
 function pendingActionLabels() {
   const labels = [];
@@ -187,7 +251,7 @@ function renderUsageLimitInputs() {
   const limits = config.usageLimits || {};
   container.replaceChildren(...Object.entries(limits).filter(([, limit]) => limit !== null && limit !== '').map(([period, limit]) => {
     const row = document.createElement('p'); row.dataset.period = period;
-    row.innerHTML = `<label><span>${USAGE_PERIOD_LABELS[period]}の上限額</span><input data-limit-period="${period}" type="number" min="${config.billingCurrency === 'USD' ? '0.01' : '1'}" step="${config.billingCurrency === 'USD' ? '0.01' : '1'}" required value="${config.billingCurrency === 'USD' ? Number(limit).toFixed(2) : limit ?? ''}"><span class="limit-currency">${config.billingCurrency}</span></label> <button class="usage-limit-remove" type="button" data-remove-limit="${period}" aria-label="${USAGE_PERIOD_LABELS[period]}の上限を削除する" title="${USAGE_PERIOD_LABELS[period]}の上限を削除する"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" stroke="currentColor" fill="none" stroke-width="1.5"></circle><path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" fill="none" stroke-width="1.5"></path></svg></button>`;
+    row.innerHTML = `<label><span>${USAGE_PERIOD_LABELS[period]}の上限額</span><input data-limit-period="${period}" type="number" min="${config.billingCurrency === 'USD' ? '0.01' : '1'}" step="${config.billingCurrency === 'USD' ? '0.01' : '1'}" required value="${config.billingCurrency === 'USD' ? Number(limit).toFixed(2) : limit ?? ''}"><span class="limit-currency">${config.billingCurrency}</span></label> <button class="usage-limit-remove" type="button" data-remove-limit="${period}" aria-label="${USAGE_PERIOD_LABELS[period]}の上限を削除する" data-tooltip="${USAGE_PERIOD_LABELS[period]}の上限を削除する"></button>`;
     return row;
   }));
   const select = $('usageLimitPeriod');
@@ -197,7 +261,7 @@ function renderUsageLimitInputs() {
   }
   if ($('addUsageLimit')) $('addUsageLimit').disabled = !select?.value;
   if ($('resetInputPrice')) {
-    $('resetInputPrice').title = `初期値：入力単価USD ${DEFAULT_INPUT_PRICE_PER_MILLION}／100万トークン、5時間USD 0.06、1日USD 0.10、7日間USD 0.50`;
+    $('resetInputPrice').dataset.tooltip = `初期値：入力単価USD ${DEFAULT_INPUT_PRICE_PER_MILLION}／100万トークン、5時間USD 0.06、1日USD 0.10、7日間USD 0.50`;
   }
 }
 function renderKeyView() {
@@ -216,7 +280,7 @@ function render() {
   verificationId++;
   clearToggleMotion($('enabled'));
   $('enabled').checked = config.enabled;
-  if ($('enabledLabel')) $('enabledLabel').textContent = config.enabled ? '浄化中' : '無効';
+  if ($('enabledLabel')) $('enabledLabel').textContent = config.enabled ? '有効' : '無効';
   $('provider').value = config.provider;
   renderKeyView();
   $('model').value = config.model;
@@ -226,38 +290,39 @@ function render() {
 
   if ($('decisionCacheLimitMb')) $('decisionCacheLimitMb').value = config.decisionCacheLimitMb;
   const renderGroup = (rules, group, title) => {
-    const editing = ruleEditMode[group];
     const heading = document.createElement('h3');
     heading.textContent = title;
     const headingBar = document.createElement('div');
     headingBar.className = 'rule-heading';
-    const editButton = document.createElement('button');
-    editButton.type = 'button'; editButton.dataset.editGroup = group;
-    editButton.textContent = editing ? '編集を破棄する' : '編集する';
-    editButton.setAttribute('aria-pressed', String(editing));
-    headingBar.append(heading, editButton);
+    const headingActions = document.createElement('div');
+    headingActions.className = 'rule-heading-actions';
+    const reset = document.createElement('button');
+    reset.type = 'button'; reset.id = `reset-${group}`; reset.dataset.resetGroup = group; reset.textContent = '初期設定に戻す';
+    headingActions.append(reset);
+    headingBar.append(heading, headingActions);
     const nodes = [headingBar];
     rules.forEach((rule, index) => {
+      const editing = activeRule?.group === group && activeRule.id === rule.id;
       const row = document.createElement('p');
       row.dataset.group = group;
       row.dataset.id = rule.id;
+      row.dataset.editing = String(editing);
+      row.dataset.enabled = String(rule.enabled);
+      row.dataset.emptyCondition = String(!rule.condition.trim());
       const thresholdId = `threshold-${group}-${index}`;
-      row.innerHTML = `${editing ? `<button class="rule-drag-handle" type="button" aria-label="${escapeHtml(rule.condition || '空の条件')}の順序を変更する">⋮⋮</button>` : ''}<label class="rule-condition"><span class="rule-condition-text"${editing ? ' hidden' : ''}>${escapeHtml(rule.condition)}</span><textarea data-field="condition" aria-label="条件文" rows="2" placeholder="例：攻撃的な表現を含む投稿"${editing ? '' : ' hidden'}>${escapeHtml(rule.condition)}</textarea></label>
-        <label class="rule-threshold" for="${thresholdId}"><span class="threshold-summary">スコア<output for="${thresholdId}">${Number(rule.threshold).toFixed(2)}</output>以上の投稿${group === 'black' ? 'を非表示' : 'のみ表示'}</span><input id="${thresholdId}" data-field="threshold" type="range" min="0" max="1" step="any" aria-label="${group === 'black' ? '非表示にする' : '表示する'}最低スコア" value="${rule.threshold}"></label>
+      row.innerHTML = `<button class="rule-drag-handle" type="button" aria-label="${escapeHtml(rule.condition || '空の条件')}の順序を変更する"><svg class="rule-drag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><div class="rule-condition"><button class="rule-condition-text" data-edit-rule="${escapeHtml(rule.id)}"${editing ? ' hidden' : ''}>${escapeHtml(rule.condition)}</button><textarea data-field="condition" aria-label="条件文" rows="2" placeholder="例：攻撃的な表現を含む投稿"${editing ? '' : ' hidden'}>${escapeHtml(rule.condition)}</textarea></div>
+        <div class="rule-threshold"><span class="threshold-summary"><span class="threshold-copy">スコア<output class="threshold-value">${Number(rule.threshold).toFixed(2)}</output>以上の投稿${group === 'black' ? 'を非表示' : 'のみ表示'}</span></span><span class="threshold-slider"><input data-field="threshold-range" type="range" min="0" max="1" step="0.01" value="${rule.threshold}" aria-label="${group === 'black' ? '非表示にする' : '表示する'}最低スコア"></span><input data-field="threshold" type="hidden" value="${rule.threshold}"></div>
         <label class="rule-enabled"><input data-field="enabled" role="switch" type="checkbox" aria-label="${escapeHtml(rule.condition || '空の条件')}を有効にする" ${rule.enabled ? 'checked' : ''}></label>
-        <button class="rule-remove" type="button" data-remove="${index}" aria-label="${escapeHtml(rule.condition || '空の条件')}を削除する" title="${escapeHtml(rule.condition || '空の条件')}を削除する"${editing ? '' : ' hidden'}><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" stroke="currentColor" fill="none" stroke-width="1.5"></circle><path d="M9 9l6 6M15 9l-6 6" stroke="currentColor" fill="none" stroke-width="1.5"></path></svg></button>`;
+        <button class="rule-remove" type="button" data-remove="${index}" aria-label="${escapeHtml(rule.condition || '空の条件')}を削除する"></button>`;
       nodes.push(row);
     });
     const actions = document.createElement('p');
     actions.className = 'rule-actions';
     const add = document.createElement('button');
     add.type = 'button'; add.id = `add-${group}`; add.dataset.addGroup = group; add.textContent = '条件を追加する';
-    const reset = document.createElement('button');
-    reset.type = 'button'; reset.id = `reset-${group}`; reset.dataset.resetGroup = group; reset.textContent = '初期設定に戻す';
-    actions.append(reset, add); actions.hidden = !editing; nodes.push(actions);
+    actions.append(add); nodes.push(actions);
     const section = document.createElement('section');
     section.className = 'rule-group';
-    section.dataset.editing = String(editing);
     heading.id = `rules-${group}-heading`;
     section.setAttribute('aria-labelledby', heading.id);
     section.append(...nodes);
@@ -273,10 +338,17 @@ function render() {
   decorateButtons();
   document.documentElement.classList.add('options-ready');
 }
+const stickyHeader = document.querySelector('.sticky-header');
+if (stickyHeader && 'ResizeObserver' in window) new ResizeObserver(([entry]) => document.documentElement.style.setProperty('--sticky-header-height', `${entry.target.getBoundingClientRect().height}px`)).observe(stickyHeader);
+function renderPreservingScroll() {
+  const scrollTop = document.body.scrollTop;
+  render();
+  document.body.scrollTop = scrollTop;
+}
 function escapeHtml(value) { return value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char])); }
 function read() {
   const rows = [...$('rules').querySelectorAll('p')];
-  const readRules = group => rows.filter(row => row.dataset.group === group).map(row => ({ id: row.dataset.id, condition: row.querySelector('[data-field="condition"]').value, threshold: Number(row.querySelector('[data-field="threshold"]').value), enabled: row.querySelector('[data-field="enabled"]').checked }));
+  const readRules = group => rows.filter(row => row.dataset.group === group && row.dataset.removing !== 'true').map(row => ({ id: row.dataset.id, condition: row.querySelector('[data-field="condition"]').value, threshold: Number(row.querySelector('[data-field="threshold"]').value), enabled: row.querySelector('[data-field="enabled"]')?.checked ?? row.dataset.enabled === 'true' }));
   config = {
     ...config,
     enabled: $('enabled').checked,
@@ -297,17 +369,17 @@ function readNormalConfig() {
 }
 async function saveConfig() {
   const button = $('save');
-  if (button.disabled) return;
+  if (button.disabled || confirmationPending) return;
   const emptyCondition = [...document.querySelectorAll('[data-field="condition"]')].find(input => !input.value.trim());
   if (emptyCondition) { status('空の条件は保存できません。入力するか削除してください'); revealField(emptyCondition); return; }
   const invalid = [...document.querySelectorAll('input[type="number"]')].find(input => !input.checkValidity());
   if (invalid) { status('入力値を確認してください。変更は保存されていません'); revealField(invalid); invalid.reportValidity(); return; }
   const pending = pendingActionLabels();
-  if (pending.length && !window.confirm(`保存すると、以下の操作が実行されます。\n\n${pending.join('\n\n')}\n\n※これらの操作は元に戻せません。実行しますか？`)) {
-    status('操作を実行せず、変更を保持しました');
+  if (pending.length && !await confirmInPage(`保存すると、以下の操作が実行されます。\n\n${pending.join('\n\n')}\n\n※これらの操作は元に戻せません。実行しますか？`, '実行する')) {
+    status('操作を実行せず、変更を保持しました', true);
     return;
   }
-  status('保存中…');
+  status('保存中…', false);
   const pendingSnapshot = { ...pendingActions, apiKeyDelete: new Set(pendingActions.apiKeyDelete) };
   const snapshot = readNormalConfig();
   button.disabled = true;
@@ -316,22 +388,17 @@ async function saveConfig() {
   $('enabled').disabled = true;
   try {
     const saved = await chrome.runtime.sendMessage({ type: 'save-config', config: snapshot });
-    if (!saved?.ok) { status('設定を保存できませんでした'); return; }
+    if (!saved?.ok) { status('設定を保存できませんでした', true); return; }
     pendingActions.blackReset = false;
     pendingActions.whiteReset = false;
     pendingActions.priceReset = false;
     appliedConfig = snapshot;
     read();
-    ruleEditMode.black = false;
-    ruleEditMode.white = false;
-    ruleEditSnapshots.black = null;
-    ruleEditSnapshots.white = null;
-    ruleEditPendingSnapshots.black = false;
-    ruleEditPendingSnapshots.white = false;
+    activeRule = null;
     const failedActions = await executePendingActions(pendingSnapshot);
-    render();
-    status(failedActions.length ? `設定を保存しました。一部の操作に失敗しました：${failedActions.join('、')}` : '設定を保存しました');
-  } catch { status('設定を保存できませんでした'); }
+    renderPreservingScroll();
+    status(failedActions.length ? `設定を保存しました。一部の操作に失敗しました：${failedActions.join('、')}` : '設定を保存しました', true);
+  } catch { status('設定を保存できませんでした', true); }
   finally { saving = false; $('enabled').disabled = false; updateDirtyState(); }
 }
 async function saveEnabled() {
@@ -346,13 +413,13 @@ async function saveEnabled() {
     if (!saved?.ok) throw new Error('save failed');
     appliedConfig.enabled = enabled;
     config.enabled = enabled;
-    if ($('enabledLabel')) $('enabledLabel').textContent = enabled ? '浄化中' : '無効';
+    if ($('enabledLabel')) $('enabledLabel').textContent = enabled ? '有効' : '無効';
     renderFilterStatus();
-    status(enabled ? 'フィルターを有効にしました' : 'フィルターを無効にしました');
+    status(enabled ? 'フィルターを有効にしました' : 'フィルターを無効にしました', true);
   } catch {
     toggle.checked = appliedConfig.enabled;
-    if ($('enabledLabel')) $('enabledLabel').textContent = appliedConfig.enabled ? '浄化中' : '無効';
-    status('フィルターの切り替えを保存できませんでした');
+    if ($('enabledLabel')) $('enabledLabel').textContent = appliedConfig.enabled ? '有効' : '無効';
+    status('フィルターの切り替えを保存できませんでした', true);
   } finally {
     toggle.disabled = false;
     saving = false;
@@ -393,7 +460,7 @@ async function saveApiKey() {
     config.keyConfiguredByProvider = { ...(config.keyConfiguredByProvider || {}), [provider]: config.keyConfigured };
     $('apiKey').value = '';
     keyEditing = false;
-    status('APIキーを保存しました');
+    status('APIキーを保存しました', true);
     renderKeyView();
     keyStatus(`保存済み（${keyMessage(result)}）`);
   } catch { keyStatus('保存できませんでした。接続を確認して再試行してください'); }
@@ -409,8 +476,41 @@ function keyMessage(result) {
   if (result?.reason === 'cost-unavailable') return '単価未設定のため使用額上限を適用できません';
   return result?.status ? `APIエラー（HTTP ${result.status}）` : '確認できませんでした';
 }
-$('rules').onclick = event => { if (saving) return; const group = event.target.dataset.addGroup; if (group) { read(); config[`${group}Rules`].push({ condition: '', threshold: 0.8, enabled: true }); render(); markDirty(); [...document.querySelectorAll('[data-group]')].filter(row => row.dataset.group === group).at(-1)?.querySelector('textarea').focus(); return; } const resetGroup = event.target.dataset.resetGroup; if (resetGroup) { read(); config[`${resetGroup}Rules`] = structuredClone(DEFAULT_CONFIG[`${resetGroup}Rules`]); pendingActions[`${resetGroup}Reset`] = true; render(); markDirty(); return; } const removeButton = event.target.closest('button[data-remove]'); if (removeButton) { read(); const row = removeButton.closest('p'); const rules = row.dataset.group === 'white' ? config.whiteRules : config.blackRules; rules.splice(Number(removeButton.dataset.remove), 1); render(); markDirty(); } };
-$('rules').addEventListener('click', event => { const group = event.target.dataset.editGroup; if (!group || saving) return; read(); if (ruleEditMode[group]) { config[`${group}Rules`] = structuredClone(ruleEditSnapshots[group] || config[`${group}Rules`]); pendingActions[`${group}Reset`] = ruleEditPendingSnapshots[group]; ruleEditSnapshots[group] = null; ruleEditPendingSnapshots[group] = false; ruleEditMode[group] = false; } else { ruleEditSnapshots[group] = structuredClone(config[`${group}Rules`]); ruleEditPendingSnapshots[group] = pendingActions[`${group}Reset`]; ruleEditMode[group] = true; } render(); markDirty(); });
+$('rules').onclick = event => {
+  if (saving) return;
+  const add = event.target.closest('button[data-add-group]');
+  if (add) { const group = add.dataset.addGroup; read(); const rule = { id: crypto.randomUUID(), condition: '', threshold: 0.8, enabled: true }; config[`${group}Rules`].push(rule); activeRule = { group, id: rule.id }; renderPreservingScroll(); markDirty(); focusConditionTextarea(group, rule.id); return; }
+  const reset = event.target.closest('button[data-reset-group]');
+  if (reset) { const group = reset.dataset.resetGroup; read(); config[`${group}Rules`] = structuredClone(DEFAULT_CONFIG[`${group}Rules`]); const key = `${group}Rules`; pendingActions[`${group}Reset`] = JSON.stringify(config[key].map(({ condition, threshold, enabled }) => [condition, Number(threshold), Boolean(enabled)])) !== JSON.stringify(appliedConfig[key].map(({ condition, threshold, enabled }) => [condition, Number(threshold), Boolean(enabled)])); if (activeRule?.group === group) activeRule = null; renderPreservingScroll(); markDirty(); return; }
+  const edit = event.target.closest('button[data-edit-rule]');
+  if (edit) { const row = edit.closest('[data-group]'); const group = row.dataset.group; const id = row.dataset.id; read(); activeRule = { group, id }; renderPreservingScroll(); focusConditionTextarea(group, id); markDirty(); return; }
+  const remove = event.target.closest('button[data-remove]');
+  if (remove) {
+    const row = remove.closest('[data-group]'); const { group, id } = row.dataset;
+    read(); row.dataset.removing = 'true'; row.inert = true; config[`${group}Rules`] = config[`${group}Rules`].filter(rule => rule.id !== id);
+    if (activeRule?.group === group && activeRule.id === id) activeRule = null;
+    markDirty();
+    const finish = () => { if (!row.isConnected) return; row.getAnimations?.().forEach(animation => animation.cancel()); renderPreservingScroll(); };
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || !row.animate) { finish(); return; }
+    const fade = row.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: 'ease-out', fill: 'forwards' });
+    fade.finished.then(() => {
+      if (!row.isConnected) return;
+      const height = row.getBoundingClientRect().height;
+      return row.animate([{ height: `${height}px`, paddingBlock: getComputedStyle(row).paddingBlock, marginBlock: getComputedStyle(row).marginBlock, borderBottomWidth: getComputedStyle(row).borderBottomWidth }, { height: '0px', paddingBlock: '0px', marginBlock: '0px', borderBottomWidth: '0px' }], { duration: 180, easing: 'ease-in', fill: 'forwards' }).finished.then(finish, finish);
+    }, finish).catch(finish);
+  }
+};
+document.addEventListener('click', event => {
+  if (!activeRule || event.target.closest?.('[data-edit-rule], .rule-actions button, #save')) return;
+  const previous = activeRule;
+  window.setTimeout(() => {
+    if (activeRule !== previous || document.querySelector(`[data-group="${previous.group}"][data-id="${previous.id}"] textarea`)?.contains(event.target)) return;
+    read();
+    activeRule = null;
+    renderPreservingScroll();
+    markDirty();
+  });
+});
 function clearRuleDrag() {
   if (!activeDrag) return;
   if (activeDrag.scrollFrame) cancelFrame(activeDrag.scrollFrame);
@@ -436,7 +536,7 @@ function updateRuleDrag(event) {
   drag.lastPointer = event;
   const y = event.clientY + document.body.scrollTop - drag.startScrollTop;
   const inside = event.clientX >= drag.groupRect.left && event.clientX <= drag.groupRect.right && y >= drag.groupRect.top && y <= drag.groupRect.bottom;
-  if (!inside || !ruleEditMode[drag.group]) {
+  if (!inside) {
     drag.scrollVelocity = 0;
     document.querySelectorAll('#rules [data-group]').forEach(node => { node.classList.remove('drop-target'); delete node.dataset.dropPosition; node.style.transform = ''; });
     drag.insertion = null;
@@ -464,7 +564,7 @@ $('rules').addEventListener('pointerdown', event => {
   const handle = event.target.closest('.rule-drag-handle');
   if (!handle || event.button !== 0) return;
   const row = handle.closest('[data-group]');
-  if (!row || !ruleEditMode[row.dataset.group]) return;
+  if (!row) return;
   const rows = [...document.querySelectorAll(`[data-group="${row.dataset.group}"]`)];
   const rects = rows.map(item => item.getBoundingClientRect());
   const groupRect = rects.reduce((box, itemRect) => ({ left: Math.min(box.left, itemRect.left), right: Math.max(box.right, itemRect.right), top: Math.min(box.top, itemRect.top), bottom: Math.max(box.bottom, itemRect.bottom) }), { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity });
@@ -486,7 +586,7 @@ $('rules').addEventListener('pointermove', event => {
     drag.clone.removeAttribute('data-id');
     drag.clone.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
     drag.clone.querySelectorAll('textarea,input,button').forEach(input => { input.tabIndex = -1; });
-    for (const [selector, area] of [['.rule-drag-handle', 'handle'], ['.rule-condition', 'condition'], ['.rule-threshold', 'threshold'], ['.rule-enabled', 'enabled'], ['.rule-remove', 'remove']]) drag.clone.querySelector(selector)?.style.setProperty('grid-area', area);
+    for (const [selector, area] of [['.rule-drag-handle', 'handle'], ['.rule-condition', 'condition'], ['.rule-threshold', 'threshold'], ['.rule-enabled, .rule-remove', 'action']]) drag.clone.querySelector(selector)?.style.setProperty('grid-area', area);
     const style = window.getComputedStyle(drag.row);
     Object.assign(drag.clone.style, { width: `${rect.width}px`, left: `${rect.left}px`, top: `${rect.top}px`, gridTemplateColumns: style.gridTemplateColumns, gridTemplateAreas: style.gridTemplateAreas, gap: style.gap, padding: style.padding, alignItems: style.alignItems });
     document.body.append(drag.clone);
@@ -525,14 +625,20 @@ $('rules').addEventListener('pointerup', event => finishRuleDrag(event));
 $('rules').addEventListener('pointercancel', event => finishRuleDrag(event, true));
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && activeDrag) clearRuleDrag(); });
 $('rules').addEventListener('keydown', event => { const handle = event.target.closest('.rule-drag-handle'); if (!handle || !event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return; event.preventDefault(); const row = handle.closest('[data-group]'); read(); const rules = config[`${row.dataset.group}Rules`]; const index = rules.findIndex(rule => rule.id === row.dataset.id); const next = index + (event.key === 'ArrowUp' ? -1 : 1); if (next < 0 || next >= rules.length) return; [rules[index], rules[next]] = [rules[next], rules[index]]; render(); markDirty(); document.querySelector(`[data-group="${row.dataset.group}"][data-id="${rules[next].id}"] .rule-drag-handle`)?.focus(); });
-$('rules').addEventListener('change', event => { const target = event.target; if (!target.dataset.field) return; const row = target.closest('[data-group]'); if (!row) return; if (target.dataset.field === 'enabled') animateToggle(target); if (!row.querySelector('[data-field="condition"]').value.trim()) { status('空の条件は保存されません。条件を入力するか削除してください'); return; } markDirty(); });
+$('rules').addEventListener('change', event => { const target = event.target; if (!target.dataset.field) return; const row = target.closest('[data-group]'); if (!row) return; if (target.dataset.field === 'enabled') { animateToggle(target); row.dataset.enabled = String(target.checked); } if (!row.querySelector('[data-field="condition"]').value.trim()) { status('空の条件は保存されません。条件を入力するか削除してください'); return; } markDirty(); });
+$('rules').addEventListener('pointerdown', event => { if (event.target.closest('.rule-remove') && event.button === 0) event.preventDefault(); });
 $('rules').addEventListener('input', event => {
-  if (event.target.dataset.field !== 'threshold') return;
   const slider = event.target;
-  slider.value = String(Math.round(Number(slider.value) * 100) / 100);
-  slider.closest('.rule-threshold').querySelector('output').value = Number(slider.value).toFixed(2);
+  if (slider.dataset.field === 'condition') {
+    slider.closest('[data-group]').dataset.emptyCondition = String(!slider.value.trim());
+    return;
+  }
+  if (slider.dataset.field !== 'threshold-range') return;
+  const row = slider.closest('[data-group]');
+  const score = Math.round(Number(slider.value) * 100) / 100;
+  row.querySelector('[data-field="threshold"]').value = String(score);
+  row.querySelector('.threshold-value').textContent = score.toFixed(2);
 });
-
 $('save')?.addEventListener('click', () => { void saveConfig(); });
 document.addEventListener('input', event => {
   if (event.target.matches('input:not(#apiKey):not(#import):not(#enabled), textarea')) markDirty();
@@ -550,7 +656,9 @@ $('resetInputPrice')?.addEventListener('click', () => {
   read();
   config.usageLimits = structuredClone(DEFAULT_CONFIG.usageLimits);
   config.billingCurrency = DEFAULT_CONFIG.billingCurrency;
-  pendingActions.priceReset = true;
+  const resetSettings = normalizeConfig({ ...config, inputPricePerMillion: DEFAULT_INPUT_PRICE_PER_MILLION, billingCurrency: DEFAULT_CONFIG.billingCurrency, usageLimits: DEFAULT_CONFIG.usageLimits });
+  const savedSettings = normalizeConfig(appliedConfig);
+  pendingActions.priceReset = JSON.stringify([resetSettings.inputPricePerMillion, resetSettings.billingCurrency, resetSettings.usageLimits]) !== JSON.stringify([savedSettings.inputPricePerMillion, savedSettings.billingCurrency, savedSettings.usageLimits]);
   $('inputPricePerMillion').value = DEFAULT_INPUT_PRICE_PER_MILLION;
   $('billingCurrency').value = config.billingCurrency;
   renderUsageLimitInputs();
@@ -568,7 +676,7 @@ $('confirmUsageLimit')?.addEventListener('click', () => { read(); const period =
 $('usageLimitInputs')?.addEventListener('change', event => { const input = event.target; if (!input.matches('[data-limit-period]')) return; if (config.billingCurrency === 'USD' && input.value !== '' && input.checkValidity()) input.value = Number(input.value).toFixed(2); markDirty(); });
 $('usageLimitInputs')?.addEventListener('click', event => { const period = event.target.closest('[data-remove-limit]')?.dataset.removeLimit; if (!period) return; read(); delete config.usageLimits[period]; render(); markDirty(); });
 $('export').onclick = async () => { read(); const blob = new Blob([exportConfig(config)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'jev-filter-rules.json'; link.click(); URL.revokeObjectURL(url); };
-$('import').onchange = async event => { const file = event.target.files[0]; if (!file) return; try { read(); const imported = importConfig(await file.text(), config); if (!window.confirm('ファイルに含まれるリストで現在の条件を置き換えます。続けますか？')) return; config = { ...config, ...imported }; render(); markDirty(); } catch (error) { status(error.message); } finally { event.target.value = ''; } };
+$('import').onchange = async event => { const file = event.target.files[0]; if (!file) return; try { read(); const imported = importConfig(await file.text(), config); if (!await confirmInPage('ファイルに含まれるリストで現在の条件を置き換えます。続けますか？', '読み込む')) return; config = { ...config, ...imported }; render(); markDirty(); } catch (error) { status(error.message, true); } finally { event.target.value = ''; } };
 for (const id of ['model', 'inputPricePerMillion', 'decisionCacheLimitMb']) {
   $(id)?.addEventListener('change', () => { markDirty(); });
 }

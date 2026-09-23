@@ -8,16 +8,18 @@
 </head>
 <body>
 <main class="page-shell">
-  <header class="page-header">
-    <div class="app-header"><div class="app-title"><h1><img src="../icons/Shirakawa-logo_simple.png" alt="Shirakawa"></h1></div><div class="toggle-control"><input id="enabled" class="rule-switch" role="switch" aria-label="フィルターの有効・無効" type="checkbox"><span id="enabledLabel">無効</span></div></div>
-    <p id="filterStatus" class="help-text" aria-live="polite"></p>
-  </header>
+  <div class="sticky-header">
+    <header class="page-header">
+      <div class="app-header"><div class="app-title"><h1><img src="../icons/Shirakawa-logo_simple.png" alt="Shirakawa"></h1></div><label class="toggle-control"><input id="enabled" class="rule-switch" role="switch" aria-label="フィルターの有効・無効" type="checkbox"><span class="enabled-copy"><span id="enabledLabel">無効</span><span id="enabledIcon" aria-hidden="true"></span></span></label></div>
+    </header>
+    <div class="filter-status-collapse" aria-hidden="true"><div class="filter-status-clip"><div id="filterStatus" class="filter-status" aria-live="polite"><span class="filter-status-mark" aria-hidden="true">!</span><span id="filterStatusText"></span></div></div></div>
   <nav class="settings-tabs" role="tablist" aria-label="設定の項目">
     <button id="tab-connection" role="tab" type="button" aria-controls="panel-connection" aria-selected="false" tabindex="-1">API接続</button>
     <button id="tab-usage" role="tab" type="button" aria-controls="panel-usage" aria-selected="true">使用量・上限</button>
     <button id="tab-rules" role="tab" type="button" aria-controls="panel-rules" aria-selected="false" tabindex="-1">フィルター条件</button>
     <button id="tab-cache" role="tab" type="button" aria-controls="panel-cache" aria-selected="false" tabindex="-1">キャッシュ</button>
   </nav>
+  </div>
 
   <section id="panel-connection" class="setting-section" role="tabpanel" aria-labelledby="tab-connection" hidden>
     <div class="connection-settings">
@@ -62,7 +64,7 @@
       <p class="usage-settings-actions"><button id="resetInputPrice" type="button" title="入力単価・通貨・上限額を初期値に戻す">初期値に戻す</button><button id="addUsageLimit" type="button" aria-expanded="false" aria-controls="usageLimitPicker">上限を追加する</button></p>
       <p id="usageLimitPicker" class="inline-controls" hidden><label>集計期間<select id="usageLimitPeriod"><option value="5h">5時間</option><option value="1d">1日（24時間）</option><option value="7d">7日間</option><option value="30d">30日間</option></select></label><button id="confirmUsageLimit" type="button">追加する</button><button id="cancelUsageLimit" type="button">キャンセルする</button></p>
     </div>
-    <details class="secondary-details"><summary>期間内の使用量をリセットする</summary><div class="details-content"><p class="help-text">上限設定ごとの使用量を0に戻し、今から集計し直します。上限による停止は解除されます。累計トークン数とサービス側の請求額は変わりません。</p><button id="resetUsage" class="button" type="button">期間内の使用量をリセットする</button></div></details>
+    <details class="secondary-details"><summary>期間内の使用量をリセットする</summary><div class="details-content"><p class="help-text">上限設定ごとの使用量を0に戻し、今から集計し直します。上限による停止は解除されます。累計トークン数とサービス側の請求額は変わりません。</p><button id="resetUsage" class="button button-danger" type="button">期間内の使用量をリセットする</button></div></details>
     <details class="secondary-details"><summary>すべての使用量をリセットする</summary><div class="details-content"><p class="help-text">累計使用量と上限設定ごとの使用量を0に戻し、今から集計し直します。使用量上限による停止は解除されます。サービス側の請求額は変わりません。</p><button id="resetAllUsage" class="button" type="button">すべての使用量をリセットする</button></div></details>
   </section>
 
@@ -101,7 +103,8 @@
   </section>
 
 </main>
-<div class="save-bar"><a class="github-link" href="https://github.com/midorisawa/Shirakawa" target="_blank" rel="noopener noreferrer" aria-label="GitHubで使い方・ソースコードを見る" title="Githubでリポジトリを見る"><img src="../icons/GitHub_Lockup_Black_Clearspace.svg" alt="GitHub"></a><div class="save-feedback"><span id="saveState" aria-live="polite"></span><output id="status" role="status" aria-live="polite"></output></div><button id="closeWithoutSaving" type="button" disabled>保存せず閉じる</button><button id="save" class="button-primary" type="button" disabled>保存する</button></div>
+<dialog id="confirmDialog" aria-labelledby="confirmMessage"><form method="dialog"><p id="confirmMessage"></p><div class="confirm-actions"><button value="cancel" autofocus>キャンセルする</button><button id="confirmAction" class="button-primary" value="confirm">続ける</button></div></form></dialog>
+<div class="save-bar"><div class="save-links"><a class="footer-link" href="https://github.com/midorisawa/Shirakawa" target="_blank" rel="noopener noreferrer" aria-label="GitHubで使い方・ソースコードを見る" title="リポジトリを見る"><img src="../icons/GitHub_Lockup_Black_Clearspace.svg" alt="GitHub"></a><a class="footer-link" href="https://forms.gle/4CB9upXFC3STrus16" target="_blank" rel="noopener noreferrer" aria-label="バグや欲しい機能" title="バグや欲しい機能">報告・要望</a></div><div class="save-feedback"><span id="saveState" aria-live="polite"></span><output id="status" role="status" aria-live="polite"></output></div><button id="closeWithoutSaving" type="button" disabled>保存せず閉じる</button><button id="save" class="button-primary" type="button" disabled>保存する</button></div>
 <script type="module" src="index.js"></script>
 </body>
 </html>

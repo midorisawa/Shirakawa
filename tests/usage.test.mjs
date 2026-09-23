@@ -33,12 +33,16 @@ test('実要求だけusageを加算し、キャッシュと期間別・全使用
     assert.equal(calls, 1);
     assert.equal((await message('get-usage')).inputTokens, 20);
     Date.now = () => 1_000_000;
-    await message('reset-all-usage');
+    const resetAll = await message('reset-all-usage');
+    assert.equal(resetAll.ok, true);
+    assert.equal(resetAll.inputTokens, 0);
     const reset = await message('get-usage');
     assert.equal(reset.inputTokens, 0);
     assert.equal(reset.unreportedRequests, 0);
     assert.deepEqual(Object.values(reset.periods), Array.from({ length: 4 }, () => ({ startedAt: 1_000_000, inputTokens: 0, unreportedRequests: 0 })));
-    await message('reset-usage');
+    const resetPeriods = await message('reset-usage');
+    assert.equal(resetPeriods.ok, true);
+    assert.equal(resetPeriods.inputTokens, 0);
     assert.equal((await message('get-usage')).inputTokens, 0);
     assert.equal((await message('get-usage')).unreportedRequests, 0);
     await ask('different');
