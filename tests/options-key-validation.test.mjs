@@ -104,7 +104,13 @@ test('編集とリスト操作は保存ボタンまで反映せず、保存時�
     assert.equal(document.getElementById('resetInputPrice').dataset.tooltip.startsWith('初期値：'), true);
     assert.equal(document.querySelector('.save-links a[aria-label]')?.getAttribute('aria-label'), 'GitHubで使い方・ソースコードを見る');
     assert.match(readFileSync(new URL('../src/options/index.js', import.meta.url), 'utf8'), /transient && message[\s\S]*5000/);
-    assert.doesNotMatch(optionsCss, /\[data-enabled="false"\]/);
+    assert.match(optionsCss, /#rules \[data-group\]\[data-enabled="false"\] \.threshold-slider input \{ filter: grayscale\(1\); \}/);
+    assert.match(optionsCss, /transition: transform \.14s ease, background-color 180ms ease;/);
+    assert.match(optionsCss, /\.threshold-slider input[^}]*transition: filter 180ms ease;/);
+    assert.match(optionsCss, /background-color 180ms ease, filter 180ms ease/);
+    assert.match(optionsCss, /body:has\(#enabled:not\(:checked\)\)[\s\S]*\.app-title img \{ filter: grayscale\(1\) brightness\(1\.25\); \}[\s\S]*\.app-title img \{ transition: filter 180ms ease; \}/);
+    assert.match(optionsCss, /\.toggle-control \.enabled-copy > #enabledLabel[^}]*transition: color 180ms ease;/);
+    assert.match(optionsCss, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.threshold-slider input\) \{ transition: none; \}[\s\S]*\.toggle-control \.enabled-copy > #enabledLabel \{ transition: none; \}/);
     assert.equal(document.querySelector('[data-group="black"]').dataset.enabled, String(DEFAULT_CONFIG.blackRules[0].enabled));
     const modelInput = document.getElementById('model');
     const originalModel = modelInput.value;

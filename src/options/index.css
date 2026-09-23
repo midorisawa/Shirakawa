@@ -23,6 +23,7 @@ body { width: 100%; height: 100%; margin: 0; background: #fff; overflow-x: auto;
 .page-shell { width: 100%; padding: 0 24px var(--save-bar-height); }
 body:has(#enabled:not(:checked)) :is(.usage-budget progress, #rules .rule-enabled input, .rule-drag-clone .rule-enabled input) { filter: grayscale(1); }
 body:has(#enabled:not(:checked)) .app-title img { filter: grayscale(1) brightness(1.25); }
+.usage-budget progress, #rules .rule-enabled input, .rule-drag-clone .rule-enabled input, .app-title img { transition: filter 180ms ease; }
 .app-title { display: flex; align-items: center; gap: 12px; }
 .app-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 .app-title img { display: block; width: 168px; height: auto; flex: 0 0 auto; }
@@ -77,7 +78,7 @@ dialog p { white-space: pre-line; }
 .help-text { color: var(--muted); font-size: 13px; line-height: 1.7; }
 .toggle-control { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; padding: 8px 12px; background: transparent; border-radius: 4px; cursor: pointer; }
 .enabled-copy { display: inline-flex; flex: 0 0 calc(2em + 18px); align-items: center; gap: 2px; width: calc(2em + 18px); line-height: 16px; }
-.toggle-control .enabled-copy > #enabledLabel { min-width: 0; font-weight: 600; color: var(--muted); }
+.toggle-control .enabled-copy > #enabledLabel { min-width: 0; font-weight: 600; color: var(--muted); transition: color 180ms ease; }
 .toggle-control:has(input:checked) .enabled-copy > #enabledLabel { color: var(--blue); }
 #enabledIcon { display: none; width: 16px; height: 16px; flex: 0 0 16px; background: var(--blue); mask: url("../icons/sparkle-16.svg") center / contain no-repeat; -webkit-mask: url("../icons/sparkle-16.svg") center / contain no-repeat; }
 .toggle-control:has(input:checked) #enabledIcon { display: inline-block; }
@@ -135,7 +136,7 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 #rules .rule-heading h3 { margin: 0; }
 #rules .rule-heading-actions { display: flex; align-items: center; gap: 8px; }
 .rule-group { display: flow-root; }
-#rules .rule-group > p[data-group] { display: grid; grid-template-columns: 36px 8px minmax(0, 1fr) 24px 224px 24px 42px; grid-template-areas: "handle . condition . threshold . action"; align-items: center; gap: 0; padding: 4px 12px; margin: 0; border-bottom: 1px solid #e8eaed; transition: transform .14s ease; }
+#rules .rule-group > p[data-group] { display: grid; grid-template-columns: 36px 8px minmax(0, 1fr) 24px 224px 24px 42px; grid-template-areas: "handle . condition . threshold . action"; align-items: center; gap: 0; padding: 4px 12px; margin: 0; border-bottom: 1px solid #e8eaed; transition: transform .14s ease, background-color 180ms ease; }
 #rules .rule-group > p[data-group].rule-dragging { visibility: hidden; }
 .rule-drag-clone { position: fixed; z-index: 10; display: grid !important; margin: 0 !important; pointer-events: none; opacity: .95; background: #fff; box-shadow: 0 8px 24px #20212433; transition: none !important; }
 .rule-remove { grid-area: action; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 40px; padding: 0; color: #c5221f; border-color: transparent; background: transparent; }
@@ -153,13 +154,15 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 #rules .rule-condition textarea { border: 0; }
 #rules .rule-condition textarea:focus-visible { outline-width: 1px; outline-offset: 1px; }
 .rule-condition textarea { width: 100%; height: auto; min-height: 54px; padding: 6px 10px; font: inherit; line-height: inherit; resize: none; field-sizing: content; align-content: center; }
+#rules .rule-group > p[data-group] .rule-condition textarea, #rules .rule-group > p[data-group] .rule-condition-text { transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease; }
 .rule-threshold { grid-area: threshold; position: relative; min-width: 0; font-size: 13px; line-height: 18px; }
 .threshold-summary { display: flex; align-items: center; width: 100%; min-height: 54px; padding-bottom: 22px; border-radius: 4px; }
 .threshold-copy { display: block; width: 100%; line-height: 18px; }
 .threshold-value { margin-inline: 4px; }
 .threshold-slider { position: absolute; inset: auto 0 0; display: flex; align-items: center; width: 100%; height: 20px; padding: 0 10px; border-radius: 4px; }
-.threshold-slider input { width: 100%; min-width: 0; height: 20px; margin: 0; accent-color: var(--blue); }
-.rule-threshold output { font-size: 18px; line-height: 24px; font-variant-numeric: tabular-nums; color: #202124; font-weight: 600; }
+.threshold-slider input { width: 100%; min-width: 0; height: 20px; margin: 0; accent-color: var(--blue); transition: filter 180ms ease; }
+#rules [data-group][data-enabled="false"] .threshold-slider input { filter: grayscale(1); }
+.rule-threshold output { font-size: 18px; line-height: 24px; font-variant-numeric: tabular-nums; color: #202124; font-weight: 600; transition: color 180ms ease; }
 #rules :where([data-editing="false"]:has(input[type="checkbox"]:not(:checked))) .threshold-value { color: #80868b; }
 .rule-enabled { grid-area: action; position: relative; justify-self: center; display: flex; align-items: center; justify-content: center; width: 42px; height: 40px; margin: 0; }
 [data-tooltip]::after { content: attr(data-tip); position: absolute; z-index: 20; right: 50%; bottom: calc(100% + 5px); width: max-content; max-width: calc(100vw - 24px); padding: 4px 8px; border-radius: 4px; background: #3c4043; color: #fff; font-size: 12px; font-weight: 400; line-height: 18px; pointer-events: none; opacity: 0; transform: translate(50%, 4px) scale(.96); transform-origin: 50% 100%; white-space: normal; }
@@ -169,13 +172,13 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 @keyframes disabled-tip-pop { to { opacity: 1; transform: translate(50%, 0) scale(1); } }
 :is(.rule-enabled, .toggle-control) input { appearance: none; width: 42px; height: 24px; padding: 0; border: 0; border-radius: 12px; background: #dadce0; position: relative; cursor: pointer; }
 :is(.rule-enabled, .toggle-control) input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px #20212433; transition: none; }
-:is(.rule-enabled, .toggle-control).motion-enabled input { transition: background-color 120ms ease; }
+:is(.rule-enabled, .toggle-control).motion-enabled input { transition: background-color 180ms ease, filter 180ms ease; }
 :is(.rule-enabled, .toggle-control).motion-enabled input::after { transition: transform 120ms ease; }
 :is(.rule-enabled, .toggle-control) input:checked { background: var(--blue); }
 :is(.rule-enabled, .toggle-control) input:checked::after { transform: translateX(18px); }
 #rules .rule-group > p[data-group] :is(.rule-drag-handle, .rule-condition-text):hover { color: var(--blue); background: #f4f8ff; border-color: transparent; }
 #rules .rule-group > p[data-group] > .rule-remove:hover { color: #fff; background: #c5221f; border-color: #c5221f; }
-#rules .rule-group > p[data-group] .rule-enabled { transition: opacity 140ms ease, visibility 140ms; }
+#rules .rule-group > p[data-group] .rule-enabled { transition: opacity 140ms ease, visibility 140ms, color 180ms ease; }
 #rules .rule-group > p[data-group]:is(:has(textarea:focus), [data-empty-condition="true"]) .rule-enabled { visibility: hidden; opacity: 0; pointer-events: none; }
 #rules .rule-group > p[data-group][data-editing="false"]:has(input[type="checkbox"]:not(:checked)) { background: #f8f9fa; }
 #rules .rule-group > p[data-group][data-editing="false"]:has(input[type="checkbox"]:not(:checked)) label { color: #80868b; }
@@ -242,7 +245,10 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
   .settings-tabs::after, .filter-status-collapse, .filter-status, #rules .rule-heading { transition: none; }
   details::details-content { transition: none; }
   summary::after { transition: none; }
-  #rules .rule-group > p[data-group], #rules .rule-group > p[data-group] .rule-enabled, #rules .rule-group > p[data-group] > .rule-remove { transition: none; }
+  #rules .rule-group > p[data-group], #rules .rule-group > p[data-group] .rule-enabled, #rules .rule-group > p[data-group] > .rule-remove,
+  #rules .rule-group > p[data-group] :is(.rule-condition textarea, .rule-condition-text, .threshold-value, .threshold-slider input) { transition: none; }
+  .usage-budget progress, #rules .rule-enabled input, .rule-drag-clone .rule-enabled input, .app-title img,
+  .toggle-control .enabled-copy > #enabledLabel { transition: none; }
   [data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { animation: none; opacity: 1; transform: translate(50%, 0); }
 }
 @media (max-width: 640px) {
