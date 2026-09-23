@@ -1,6 +1,6 @@
 # X DOM fixture
 
-`x-page.html`は、2026-09-20にログイン済みX日本語UIで観測した投稿構造を、架空データで最小再現するテスト用ページです。拡張本体やテストランナーはまだ実装していません。
+`x-page.html`は、2026-09-20にログイン済みX日本語UIで観測した投稿構造を、架空データで最小再現するテスト用ページです。`tests/fixture.test.mjs`の先頭テストがこのHTMLをjsdomに読み込み、content scriptの原文復元と再判定を検証します。`filter-preview.html`と`options-preview/popup-check.html`は手動プレビュー用です。
 
 共通の投稿セレクターは`main [data-testid="primaryColumn"]`、`article[role="article"][data-testid="tweet"]`、本文の`div[data-testid="tweetText"]`、投稿者の`div[data-testid="User-Name"]`、投稿時刻の`time`です。引用カードは投稿記事内の`div[role="link"]`に同じ本文・投稿者要素を持ちます。
 

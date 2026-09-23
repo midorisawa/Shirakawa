@@ -2,21 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_INPUT_PRICE_PER_MILLION, normalizeConfig } from '../src/core/config.js';
 
-test('既定単価はOpenRouterのJev 1.13入力価格を使う', () => {
-  const config = normalizeConfig({});
-  assert.equal(config.billingCurrency, 'USD');
-  assert.equal(config.inputPricePerMillion, DEFAULT_INPUT_PRICE_PER_MILLION);
-});
-
-test('JPY未設定へUSD既定単価を混入しない', () => {
-  assert.equal(normalizeConfig({ billingCurrency: 'JPY', inputPricePerMillion: null }).inputPricePerMillion, null);
-  assert.equal(normalizeConfig({ billingCurrency: 'USD', inputPricePerMillion: null }).inputPricePerMillion, DEFAULT_INPUT_PRICE_PER_MILLION);
-});
-
-test('ユーザー指定単価と通貨を保持する', () => {
-  const config = normalizeConfig({ billingCurrency: 'JPY', inputPricePerMillion: 12 });
-  assert.equal(config.billingCurrency, 'JPY');
-  assert.equal(config.inputPricePerMillion, 12);
+test('通貨と単価を正規化する', () => {
+  const cases = [
+    [{}, 'USD', DEFAULT_INPUT_PRICE_PER_MILLION],
+    [{ billingCurrency: 'JPY', inputPricePerMillion: null }, 'JPY', null],
+    [{ billingCurrency: 'USD', inputPricePerMillion: null }, 'USD', DEFAULT_INPUT_PRICE_PER_MILLION],
+    [{ billingCurrency: 'JPY', inputPricePerMillion: 12 }, 'JPY', 12]
+  ];
+  for (const [input, currency, price] of cases) {
+    const config = normalizeConfig(input);
+    assert.equal(config.billingCurrency, currency);
+    assert.equal(config.inputPricePerMillion, price);
+  }
 });
 
 test('新規設定はUSDの初期上限を持ち、既存の上限と削除を保持する', () => {
