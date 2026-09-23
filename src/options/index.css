@@ -156,14 +156,14 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 .rule-condition textarea { width: 100%; height: auto; min-height: 54px; padding: 6px 10px; font: inherit; line-height: inherit; resize: none; field-sizing: content; align-content: center; }
 #rules .rule-group > p[data-group] .rule-condition textarea, #rules .rule-group > p[data-group] .rule-condition-text { transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease; }
 .rule-threshold { grid-area: threshold; position: relative; min-width: 0; font-size: 13px; line-height: 18px; }
-.threshold-summary { display: flex; align-items: center; width: 100%; min-height: 54px; padding-bottom: 22px; border-radius: 4px; }
+.threshold-summary { display: flex; align-items: center; width: 100%; min-height: 54px; padding-bottom: 22px; border-radius: 4px; transition: color 180ms ease; }
 .threshold-copy { display: block; width: 100%; line-height: 18px; }
+#rules [data-group][data-enabled="false"] .threshold-summary, #rules [data-group][data-enabled="false"] .threshold-summary .threshold-value { color: #80868b; }
 .threshold-value { margin-inline: 4px; }
 .threshold-slider { position: absolute; inset: auto 0 0; display: flex; align-items: center; width: 100%; height: 20px; padding: 0 10px; border-radius: 4px; }
 .threshold-slider input { width: 100%; min-width: 0; height: 20px; margin: 0; accent-color: var(--blue); transition: filter 180ms ease; }
 #rules [data-group][data-enabled="false"] .threshold-slider input { filter: grayscale(1); }
 .rule-threshold output { font-size: 18px; line-height: 24px; font-variant-numeric: tabular-nums; color: #202124; font-weight: 600; transition: color 180ms ease; }
-#rules :where([data-editing="false"]:has(input[type="checkbox"]:not(:checked))) .threshold-value { color: #80868b; }
 .rule-enabled { grid-area: action; position: relative; justify-self: center; display: flex; align-items: center; justify-content: center; width: 42px; height: 40px; margin: 0; }
 [data-tooltip]::after { content: attr(data-tip); position: absolute; z-index: 20; right: 50%; bottom: calc(100% + 5px); width: max-content; max-width: calc(100vw - 24px); padding: 4px 8px; border-radius: 4px; background: #3c4043; color: #fff; font-size: 12px; font-weight: 400; line-height: 18px; pointer-events: none; opacity: 0; transform: translate(50%, 4px) scale(.96); transform-origin: 50% 100%; white-space: normal; }
 [data-tooltip] { position: relative; }
