@@ -30,7 +30,7 @@ body:has(#enabled:not(:checked)) .app-title img { filter: grayscale(1) brightnes
 .filter-status-collapse { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 180ms ease, opacity 180ms ease; }
 .filter-status-collapse.is-visible { grid-template-rows: 1fr; opacity: 1; }
 .filter-status-clip { min-height: 0; overflow: hidden; }
-.filter-status { display: flex; align-items: center; gap: 8px; margin: 4px 0; padding: 0 10px; border: 1px solid #eadfca; border-radius: 4px; background: #fbf8f2; color: #5c5549; font-size: 13px; line-height: 18px; transition: padding-block 180ms ease; }
+.filter-status { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; padding: 0 10px; border: 1px solid #eadfca; border-radius: 4px; background: #fbf8f2; color: #5c5549; font-size: 13px; line-height: 18px; transition: padding-block 180ms ease; }
 .filter-status-collapse.is-visible .filter-status { padding-block: 6px; }
 .filter-status-mark { display: inline-flex; flex: 0 0 18px; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid #a69471; border-radius: 50%; color: #82704e; font-weight: 600; line-height: 1; }
 :root:has(.filter-status-collapse.is-visible) { --sticky-header-height: 152px; }
@@ -75,11 +75,14 @@ dialog p { white-space: pre-line; }
 .key-state { font-size: 14px; }
 .key-state .status-label { min-width: 0; max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
 .help-text { color: var(--muted); font-size: 13px; line-height: 1.7; }
-.toggle-control { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; padding: 8px 12px; background: transparent; border-radius: 4px; }
-.toggle-control > span { min-width: 3em; font-weight: 600; color: var(--muted); }
-.toggle-control:has(input:checked) > span { color: var(--blue); }
+.toggle-control { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; padding: 8px 12px; background: transparent; border-radius: 4px; cursor: pointer; }
+.enabled-copy { display: inline-flex; flex: 0 0 calc(2em + 18px); align-items: center; gap: 2px; width: calc(2em + 18px); line-height: 16px; }
+.toggle-control .enabled-copy > #enabledLabel { min-width: 0; font-weight: 600; color: var(--muted); }
+.toggle-control:has(input:checked) .enabled-copy > #enabledLabel { color: var(--blue); }
+#enabledIcon { display: none; width: 16px; height: 16px; flex: 0 0 16px; background: var(--blue); mask: url("../icons/sparkle-16.svg") center / contain no-repeat; -webkit-mask: url("../icons/sparkle-16.svg") center / contain no-repeat; }
+.toggle-control:has(input:checked) #enabledIcon { display: inline-block; }
 html:not(.options-ready) :is(.toggle-control, #usageLimitsStatus), #usageLimitsStatus:not(.usage-ready) { visibility: hidden; }
-.priority-notice { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 10px 12px; border: 1px solid #d2e3fc; border-radius: 4px; background: #f8fafd; color: #3c4043; font-size: 13px; }
+.priority-notice { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 10px 12px; border: 1px solid #d2e3fc; border-radius: 4px; background: #f8fafd; color: #3c4043; font-size: 13px; }
 .priority-notice-mark { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex: 0 0 18px; border: 1px solid #5f6368; border-radius: 50%; color: #5f6368; font-weight: 700; line-height: 1; }
 label { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; color: #3c4043; font-size: 14px; min-width: 0; }
 input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--blue); flex-shrink: 0; }
@@ -133,6 +136,7 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 .rule-remove { grid-area: action; display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 40px; padding: 0; color: #c5221f; border-color: transparent; background: transparent; }
 .rule-drag-clone .rule-remove { display: none; }
 #rules .rule-group > p[data-group] > .rule-remove { visibility: hidden; opacity: 0; pointer-events: none; transition: opacity 140ms ease, visibility 140ms; }
+#rules .rule-group > p[data-group]:is(:has(textarea:focus, .rule-remove:focus), [data-empty-condition="true"]) > .rule-remove { visibility: visible; opacity: 1; pointer-events: auto; }
 .rule-drag-handle { grid-area: handle; align-self: stretch; width: 36px; min-height: 32px; padding: 4px; border: 0; color: var(--muted); background: transparent; cursor: grab; }
 .rule-drag-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .rule-drag-handle { touch-action: none; }
@@ -147,22 +151,16 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 .rule-threshold { grid-area: threshold; position: relative; min-width: 0; font-size: 13px; line-height: 18px; }
 .threshold-summary { display: flex; align-items: center; width: 100%; min-height: 54px; padding-bottom: 22px; border-radius: 4px; }
 .threshold-copy { display: block; width: 100%; line-height: 18px; }
-.threshold-slider { position: absolute; inset: auto 0 0; display: flex; align-items: center; width: 100%; height: 20px; padding: 0 10px; border-radius: 4px; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 140ms ease, visibility 140ms; }
-.rule-threshold[data-score-editing="true"] .threshold-slider { opacity: 1; visibility: visible; pointer-events: auto; }
+.threshold-value { margin-inline: 4px; }
+.threshold-slider { position: absolute; inset: auto 0 0; display: flex; align-items: center; width: 100%; height: 20px; padding: 0 10px; border-radius: 4px; }
 .threshold-slider input { width: 100%; min-width: 0; height: 20px; margin: 0; accent-color: var(--blue); }
-.rule-threshold:hover:not([data-score-editing="true"]) .threshold-toggle { color: var(--blue); background: #f4f8ff; }
-.threshold-toggle { display: flex; align-self: stretch; align-items: center; width: 100%; margin: 0 0 -22px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; line-height: 18px; text-align: left; cursor: pointer; transition: transform 140ms ease; }
-.rule-threshold[data-score-editing="true"] .threshold-toggle { transform: translateY(-11px); }
-.rule-threshold[data-score-editing="true"] .threshold-toggle { pointer-events: none; cursor: default; }
 .rule-threshold output { font-size: 18px; line-height: 24px; font-variant-numeric: tabular-nums; color: #202124; font-weight: 600; }
 #rules :where([data-editing="false"]:has(input[type="checkbox"]:not(:checked))) .threshold-value { color: #80868b; }
-#rules .rule-threshold:hover:not([data-score-editing="true"]) .threshold-value { color: var(--blue); }
-.threshold-toggle:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 2px; }
 .rule-enabled { grid-area: action; position: relative; justify-self: center; display: flex; align-items: center; justify-content: center; width: 42px; height: 40px; margin: 0; }
-.rule-enabled::after, [data-tooltip]::after { content: attr(data-tip); position: absolute; z-index: 20; right: 50%; bottom: calc(100% + 5px); width: max-content; max-width: calc(100vw - 24px); padding: 4px 8px; border-radius: 4px; background: #3c4043; color: #fff; font-size: 12px; font-weight: 400; line-height: 18px; pointer-events: none; opacity: 0; transform: translate(50%, 4px) scale(.96); transform-origin: 50% 100%; white-space: normal; }
+[data-tooltip]::after { content: attr(data-tip); position: absolute; z-index: 20; right: 50%; bottom: calc(100% + 5px); width: max-content; max-width: calc(100vw - 24px); padding: 4px 8px; border-radius: 4px; background: #3c4043; color: #fff; font-size: 12px; font-weight: 400; line-height: 18px; pointer-events: none; opacity: 0; transform: translate(50%, 4px) scale(.96); transform-origin: 50% 100%; white-space: normal; }
 [data-tooltip] { position: relative; }
 [data-tooltip]::after { content: attr(data-tooltip); }
-.rule-enabled:hover::after, .rule-enabled:focus-within::after, .rule-enabled[data-disabled-tip="true"]::after, [data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { animation: disabled-tip-pop 140ms ease-out forwards; }
+[data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { animation: disabled-tip-pop 140ms ease-out forwards; }
 @keyframes disabled-tip-pop { to { opacity: 1; transform: translate(50%, 0) scale(1); } }
 :is(.rule-enabled, .toggle-control) input { appearance: none; width: 42px; height: 24px; padding: 0; border: 0; border-radius: 12px; background: #dadce0; position: relative; cursor: pointer; }
 :is(.rule-enabled, .toggle-control) input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px #20212433; transition: none; }
@@ -172,16 +170,12 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
 :is(.rule-enabled, .toggle-control) input:checked::after { transform: translateX(18px); }
 #rules .rule-group > p[data-group] :is(.rule-drag-handle, .rule-condition-text):hover { color: var(--blue); background: #f4f8ff; border-color: transparent; }
 #rules .rule-group > p[data-group] > .rule-remove:hover { color: #fff; background: #c5221f; border-color: #c5221f; }
-#rules .rule-group > p[data-group][data-hold-delete="true"] > .rule-remove:hover { color: #fff; background: #c5221f; border-color: #c5221f; }
 #rules .rule-group > p[data-group] .rule-enabled { transition: opacity 140ms ease, visibility 140ms; }
-#rules .rule-group > p[data-group][data-hold-delete="true"] .rule-enabled { visibility: hidden; opacity: 0; pointer-events: none; }
-#rules .rule-group > p[data-group][data-hold-delete="true"] .rule-remove { visibility: visible; opacity: 1; pointer-events: auto; }
+#rules .rule-group > p[data-group]:is(:has(textarea:focus), [data-empty-condition="true"]) .rule-enabled { visibility: hidden; opacity: 0; pointer-events: none; }
 #rules .rule-group > p[data-group][data-editing="false"]:has(input[type="checkbox"]:not(:checked)) { background: #f8f9fa; }
-#rules .rule-group > p[data-group][data-editing="false"]:has(input[type="checkbox"]:not(:checked)) :is(label, .rule-remove) { color: #80868b; }
+#rules .rule-group > p[data-group][data-editing="false"]:has(input[type="checkbox"]:not(:checked)) label { color: #80868b; }
 #rules .rule-group > p[data-group][data-editing="false"]:has(input[type="checkbox"]:not(:checked)) :is(textarea, .rule-condition-text) { background: transparent; border-color: transparent; color: #80868b; }
 #rules .rule-group > p[data-group][data-editing="false"]:has(input[type="checkbox"]:not(:checked)) .rule-condition-text:hover { color: var(--blue); background: #f4f8ff; }
-#rules .rule-group > p[data-group][data-editing="false"][data-hold-delete="true"]:has(input[type="checkbox"]:not(:checked)) > .rule-remove:hover { color: #fff; background: #c5221f; border-color: #c5221f; }
-#rules .rule-group > p[data-group][data-editing="false"][data-hold-delete="true"]:has(input[type="checkbox"]:not(:checked)) > .rule-remove:hover .button-icon { color: #fff; }
 #rules .rule-group > .rule-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 10px; margin: 14px 0 24px; }
 #rules .rule-group > .rule-actions > :first-child { grid-column: 2; justify-self: center; }
 #rules [data-reset-group] { min-height: 32px; height: 32px; padding: 4px 10px; font-size: 13px; color: var(--muted); }
@@ -242,7 +236,7 @@ details[open] > summary::after { transform: translateY(1px) rotate(225deg); }
   [role="tabpanel"].tab-panel-fade { animation: none; }
   .settings-tabs::after, .filter-status-collapse, .filter-status, #rules .rule-heading { transition: none; }
   #rules .rule-group > p[data-group], #rules .rule-group > p[data-group] .rule-enabled, #rules .rule-group > p[data-group] > .rule-remove { transition: none; }
-  .rule-enabled:hover::after, .rule-enabled:focus-within::after, .rule-enabled[data-disabled-tip="true"]::after, [data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { animation: none; opacity: 1; transform: translate(50%, 0); }
+  [data-tooltip]:hover::after, [data-tooltip]:focus-visible::after { animation: none; opacity: 1; transform: translate(50%, 0); }
 }
 @media (max-width: 640px) {
   .price-controls > label:first-child, #usageLimitInputs > p > label { width: 100%; grid-template-columns: minmax(0, 1fr) 150px 32px; }

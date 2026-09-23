@@ -6,14 +6,13 @@ let keyEditing = false;
 let appliedConfig = structuredClone(DEFAULT_CONFIG);
 let saving = false;
 let activeRule = null;
-let activeScore = null;
 let activeDrag = null;
 const pendingActions = { cache: false, usage: false, allUsage: false, blackReset: false, whiteReset: false, priceReset: false, apiKeyDelete: new Set() };
 const scheduleFrame = callback => (window.requestAnimationFrame ? window.requestAnimationFrame(callback) : window.setTimeout(callback, 16));
 const cancelFrame = id => (window.cancelAnimationFrame ? window.cancelAnimationFrame(id) : window.clearTimeout(id));
 const $ = id => document.getElementById(id);
 let statusTimer = 0;
-const status = (message, transient = false) => {
+const status = (message, transient = true) => {
   if (statusTimer) window.clearTimeout(statusTimer);
   $('status').textContent = message;
   $('status').dataset.error = /できません|失敗|保存されていません/.test(message);
@@ -281,7 +280,7 @@ function render() {
   verificationId++;
   clearToggleMotion($('enabled'));
   $('enabled').checked = config.enabled;
-  if ($('enabledLabel')) $('enabledLabel').textContent = config.enabled ? '浄化中' : '無効';
+  if ($('enabledLabel')) $('enabledLabel').textContent = config.enabled ? '有効' : '無効';
   $('provider').value = config.provider;
   renderKeyView();
   $('model').value = config.model;
@@ -309,12 +308,11 @@ function render() {
       row.dataset.id = rule.id;
       row.dataset.editing = String(editing);
       row.dataset.enabled = String(rule.enabled);
-      if (holdDeleteTarget?.group === group && holdDeleteTarget.id === rule.id) row.dataset.holdDelete = 'true';
-      if (activeScore?.group === group && activeScore.id === rule.id) row.dataset.scoreEditing = 'true';
+      row.dataset.emptyCondition = String(!rule.condition.trim());
       const thresholdId = `threshold-${group}-${index}`;
       row.innerHTML = `<button class="rule-drag-handle" type="button" aria-label="${escapeHtml(rule.condition || '空の条件')}の順序を変更する"><svg class="rule-drag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><div class="rule-condition"><button class="rule-condition-text" data-edit-rule="${escapeHtml(rule.id)}"${editing ? ' hidden' : ''}>${escapeHtml(rule.condition)}</button><textarea data-field="condition" aria-label="条件文" rows="2" placeholder="例：攻撃的な表現を含む投稿"${editing ? '' : ' hidden'}>${escapeHtml(rule.condition)}</textarea></div>
-        <div class="rule-threshold"><span class="threshold-summary"><button type="button" class="threshold-toggle" tabindex="${activeScore?.group === group && activeScore.id === rule.id ? '-1' : '0'}" aria-expanded="${activeScore?.group === group && activeScore.id === rule.id}" aria-label="最低スコアを変更する"><span class="threshold-copy">スコア<output class="threshold-value">${Number(rule.threshold).toFixed(2)}</output>以上の投稿${group === 'black' ? 'を非表示' : 'のみ表示'}</span></button></span><span class="threshold-slider"><input data-field="threshold-range" type="range" min="0" max="1" step="0.01" value="${rule.threshold}" aria-label="${group === 'black' ? '非表示にする' : '表示する'}最低スコア"></span><input data-field="threshold" type="hidden" value="${rule.threshold}"></div>
-        <label class="rule-enabled" data-tip="長押しで削除"><input data-field="enabled" role="switch" type="checkbox" aria-label="${escapeHtml(rule.condition || '空の条件')}を有効にする" ${rule.enabled ? 'checked' : ''}></label>
+        <div class="rule-threshold"><span class="threshold-summary"><span class="threshold-copy">スコア<output class="threshold-value">${Number(rule.threshold).toFixed(2)}</output>以上の投稿${group === 'black' ? 'を非表示' : 'のみ表示'}</span></span><span class="threshold-slider"><input data-field="threshold-range" type="range" min="0" max="1" step="0.01" value="${rule.threshold}" aria-label="${group === 'black' ? '非表示にする' : '表示する'}最低スコア"></span><input data-field="threshold" type="hidden" value="${rule.threshold}"></div>
+        <label class="rule-enabled"><input data-field="enabled" role="switch" type="checkbox" aria-label="${escapeHtml(rule.condition || '空の条件')}を有効にする" ${rule.enabled ? 'checked' : ''}></label>
         <button class="rule-remove" type="button" data-remove="${index}" aria-label="${escapeHtml(rule.condition || '空の条件')}を削除する"></button>`;
       nodes.push(row);
     });
@@ -381,7 +379,7 @@ async function saveConfig() {
     status('操作を実行せず、変更を保持しました', true);
     return;
   }
-  status('保存中…');
+  status('保存中…', false);
   const pendingSnapshot = { ...pendingActions, apiKeyDelete: new Set(pendingActions.apiKeyDelete) };
   const snapshot = readNormalConfig();
   button.disabled = true;
@@ -415,12 +413,12 @@ async function saveEnabled() {
     if (!saved?.ok) throw new Error('save failed');
     appliedConfig.enabled = enabled;
     config.enabled = enabled;
-    if ($('enabledLabel')) $('enabledLabel').textContent = enabled ? '浄化中' : '無効';
+    if ($('enabledLabel')) $('enabledLabel').textContent = enabled ? '有効' : '無効';
     renderFilterStatus();
     status(enabled ? 'フィルターを有効にしました' : 'フィルターを無効にしました', true);
   } catch {
     toggle.checked = appliedConfig.enabled;
-    if ($('enabledLabel')) $('enabledLabel').textContent = appliedConfig.enabled ? '浄化中' : '無効';
+    if ($('enabledLabel')) $('enabledLabel').textContent = appliedConfig.enabled ? '有効' : '無効';
     status('フィルターの切り替えを保存できませんでした', true);
   } finally {
     toggle.disabled = false;
@@ -489,7 +487,6 @@ $('rules').onclick = event => {
   const remove = event.target.closest('button[data-remove]');
   if (remove) {
     const row = remove.closest('[data-group]'); const { group, id } = row.dataset;
-    if (holdDeleteTarget?.group === group && holdDeleteTarget.id === id) clearHoldDelete();
     read(); row.dataset.removing = 'true'; row.inert = true; config[`${group}Rules`] = config[`${group}Rules`].filter(rule => rule.id !== id);
     if (activeRule?.group === group && activeRule.id === id) activeRule = null;
     markDirty();
@@ -504,7 +501,7 @@ $('rules').onclick = event => {
   }
 };
 document.addEventListener('click', event => {
-  if (!activeRule || event.target.closest?.('[data-edit-rule], .rule-actions button, .rule-threshold, #save')) return;
+  if (!activeRule || event.target.closest?.('[data-edit-rule], .rule-actions button, #save')) return;
   const previous = activeRule;
   window.setTimeout(() => {
     if (activeRule !== previous || document.querySelector(`[data-group="${previous.group}"][data-id="${previous.id}"] textarea`)?.contains(event.target)) return;
@@ -581,14 +578,12 @@ $('rules').addEventListener('pointermove', event => {
   if (!drag.started && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 4) return;
   if (!drag.started) {
     drag.started = true;
-    if (activeScore?.group === drag.group && activeScore.id === drag.id) closeScoreEditor();
     const rect = drag.row.getBoundingClientRect();
     drag.clone = drag.row.cloneNode(true);
     drag.clone.classList.add('rule-drag-clone');
     drag.clone.setAttribute('aria-hidden', 'true');
     drag.clone.removeAttribute('data-group');
     drag.clone.removeAttribute('data-id');
-    drag.clone.removeAttribute('data-hold-delete');
     drag.clone.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
     drag.clone.querySelectorAll('textarea,input,button').forEach(input => { input.tabIndex = -1; });
     for (const [selector, area] of [['.rule-drag-handle', 'handle'], ['.rule-condition', 'condition'], ['.rule-threshold', 'threshold'], ['.rule-enabled, .rule-remove', 'action']]) drag.clone.querySelector(selector)?.style.setProperty('grid-area', area);
@@ -630,132 +625,20 @@ $('rules').addEventListener('pointerup', event => finishRuleDrag(event));
 $('rules').addEventListener('pointercancel', event => finishRuleDrag(event, true));
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && activeDrag) clearRuleDrag(); });
 $('rules').addEventListener('keydown', event => { const handle = event.target.closest('.rule-drag-handle'); if (!handle || !event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return; event.preventDefault(); const row = handle.closest('[data-group]'); read(); const rules = config[`${row.dataset.group}Rules`]; const index = rules.findIndex(rule => rule.id === row.dataset.id); const next = index + (event.key === 'ArrowUp' ? -1 : 1); if (next < 0 || next >= rules.length) return; [rules[index], rules[next]] = [rules[next], rules[index]]; render(); markDirty(); document.querySelector(`[data-group="${row.dataset.group}"][data-id="${rules[next].id}"] .rule-drag-handle`)?.focus(); });
-let disabledTipTimer = 0;
-$('rules').addEventListener('change', event => { const target = event.target; if (!target.dataset.field) return; const row = target.closest('[data-group]'); if (!row) return; if (target.dataset.field === 'enabled') { animateToggle(target); row.dataset.enabled = String(target.checked); document.querySelectorAll('#rules .rule-enabled[data-disabled-tip="true"]').forEach(label => { delete label.dataset.disabledTip; }); if (disabledTipTimer) window.clearTimeout(disabledTipTimer); disabledTipTimer = 0; if (!target.checked) row.querySelector('.rule-enabled').dataset.disabledTip = 'true'; } if (!row.querySelector('[data-field="condition"]').value.trim()) { status('空の条件は保存されません。条件を入力するか削除してください'); return; } markDirty(); });
-function scheduleDisabledTipHide(control) {
-  if (disabledTipTimer) window.clearTimeout(disabledTipTimer);
-  disabledTipTimer = window.setTimeout(() => { control.removeAttribute('data-disabled-tip'); disabledTipTimer = 0; }, 1000);
-}
-$('rules').addEventListener('pointerenter', event => { const control = event.target.closest('.rule-enabled'); if (!control) return; if (disabledTipTimer) window.clearTimeout(disabledTipTimer); disabledTipTimer = 0; }, true);
-$('rules').addEventListener('pointerleave', event => { const control = event.target.closest('.rule-enabled'); if (control?.dataset.disabledTip === 'true') scheduleDisabledTipHide(control); }, true);
-$('rules').addEventListener('focusin', event => { if (event.target.closest('.rule-enabled') && disabledTipTimer) window.clearTimeout(disabledTipTimer); }, true);
-$('rules').addEventListener('focusout', event => { const control = event.target.closest('.rule-enabled'); if (control?.dataset.disabledTip === 'true') scheduleDisabledTipHide(control); }, true);
-let holdTimer = 0;
-let holdPointer = null;
-let suppressSwitchClick = null;
-let holdDeleteTimer = 0;
-let holdDeleteTarget = null;
-function clearHoldDelete() {
-  if (holdDeleteTimer) window.clearTimeout(holdDeleteTimer);
-  holdDeleteTimer = 0;
-  document.querySelectorAll('#rules [data-hold-delete]').forEach(row => { delete row.dataset.holdDelete; });
-  holdDeleteTarget = null;
-}
-function scheduleHoldDeleteReturn() {
-  if (holdDeleteTimer) window.clearTimeout(holdDeleteTimer);
-  holdDeleteTimer = window.setTimeout(() => {
-    const target = holdDeleteTarget;
-    const visibleRow = target && document.querySelector(`#rules [data-group="${target.group}"][data-id="${target.id}"]`);
-    if (visibleRow) delete visibleRow.dataset.holdDelete;
-    holdDeleteTarget = null; holdDeleteTimer = 0;
-  }, 3000);
-}
-$('rules').addEventListener('pointerenter', event => {
-  const control = event.target.closest('.rule-remove');
-  const row = control?.closest('[data-hold-delete="true"]');
-  if (!row) return;
-  row.querySelector('.rule-enabled')?.removeAttribute('data-disabled-tip');
-  if (holdDeleteTimer) window.clearTimeout(holdDeleteTimer);
-  holdDeleteTimer = 0;
-}, true);
-$('rules').addEventListener('pointerleave', event => {
-  const control = event.target.closest('.rule-enabled, .rule-remove');
-  const row = control?.closest('[data-hold-delete="true"]');
-  if (!row || (event.relatedTarget && control.contains(event.relatedTarget)) || holdDeleteTarget?.id !== row.dataset.id || holdDeleteTarget?.group !== row.dataset.group) return;
-  if (control.matches('.rule-enabled')) {
-    control.removeAttribute('data-disabled-tip');
-    if (disabledTipTimer) window.clearTimeout(disabledTipTimer);
-    disabledTipTimer = 0;
-    return;
-  }
-  scheduleHoldDeleteReturn();
-}, true);
-function cancelSwitchHold(event) {
-  if (holdTimer) window.clearTimeout(holdTimer);
-  holdTimer = 0;
-  const target = holdPointer;
-  if (target && event?.type !== 'pointerup' && holdDeleteTarget?.group === target.group && holdDeleteTarget.id === target.ruleId) { clearHoldDelete(); suppressSwitchClick = null; }
-  holdPointer = null;
-  if (event?.type === 'pointerup' && suppressSwitchClick) window.setTimeout(() => { suppressSwitchClick = null; }, 0);
-}
-$('rules').addEventListener('pointerdown', event => {
-  const toggle = event.target.closest('.rule-enabled input');
-  if (!toggle || event.button !== 0) return;
-  const row = toggle.closest('[data-group]'); holdPointer = { id: event.pointerId, x: event.clientX, y: event.clientY, group: row.dataset.group, ruleId: row.dataset.id, checked: toggle.checked };
-  holdTimer = window.setTimeout(() => {
-    clearHoldDelete();
-    const visibleRow = document.querySelector(`#rules [data-group="${row.dataset.group}"][data-id="${row.dataset.id}"]`);
-    if (!visibleRow) { holdTimer = 0; return; }
-    visibleRow.dataset.holdDelete = 'true'; suppressSwitchClick = { group: visibleRow.dataset.group, id: visibleRow.dataset.id, checked: holdPointer?.checked ?? toggle.checked }; holdTimer = 0;
-    const label = visibleRow.querySelector('.rule-enabled');
-    if (label) label.dataset.disabledTip = 'true';
-    if (disabledTipTimer) window.clearTimeout(disabledTipTimer);
-    disabledTipTimer = 0;
-    holdDeleteTarget = { group: visibleRow.dataset.group, id: visibleRow.dataset.id };
-    scheduleHoldDeleteReturn();
-  }, 550);
-});
-document.addEventListener('pointermove', event => { if (holdPointer?.id === event.pointerId && Math.hypot(event.clientX - holdPointer.x, event.clientY - holdPointer.y) > 8) cancelSwitchHold(); });
-document.addEventListener('pointerup', cancelSwitchHold);
-document.addEventListener('pointercancel', cancelSwitchHold);
-$('rules').addEventListener('click', event => {
-  const clickedSwitch = event.target.closest('.rule-enabled input');
-  const row = clickedSwitch?.closest('[data-group]');
-  if (suppressSwitchClick && row?.dataset.group === suppressSwitchClick.group && row.dataset.id === suppressSwitchClick.id) { event.preventDefault(); event.stopImmediatePropagation(); clickedSwitch.checked = suppressSwitchClick.checked; suppressSwitchClick = null; return; }
-});
-document.addEventListener('click', event => {
-  if (!event.target.closest('.rule-enabled input')) suppressSwitchClick = null;
-});
-$('rules').addEventListener('click', event => {
-  if (event.target.closest('.threshold-slider input')) return;
-  const toggle = event.target.closest('.threshold-toggle');
-  if (!toggle) return;
-  const { group, id } = toggle.closest('[data-group]').dataset;
-  if (activeRule) { read(); activeRule = null; renderPreservingScroll(); }
-  closeScoreEditor();
-  activeScore = { group, id };
-  const row = document.querySelector(`#rules [data-group="${group}"][data-id="${id}"]`);
-  const threshold = row.querySelector('.rule-threshold');
-  threshold.dataset.scoreEditing = 'true';
-  threshold.querySelector('.threshold-toggle').setAttribute('aria-expanded', 'true');
-  threshold.querySelector('.threshold-toggle').tabIndex = -1;
-  threshold.querySelector('[data-field="threshold-range"]').focus({ preventScroll: true });
-});
-function closeScoreEditor({ restoreFocus = false } = {}) {
-  if (!activeScore) return;
-  const row = document.querySelector(`#rules [data-group="${activeScore.group}"][data-id="${activeScore.id}"]`);
-  const threshold = row?.querySelector('.rule-threshold');
-  const toggle = threshold?.querySelector('.threshold-toggle');
-  if (threshold) delete threshold.dataset.scoreEditing;
-  if (toggle) { toggle.setAttribute('aria-expanded', 'false'); toggle.tabIndex = 0; }
-  activeScore = null;
-  if (restoreFocus) toggle?.focus({ preventScroll: true });
-}
+$('rules').addEventListener('change', event => { const target = event.target; if (!target.dataset.field) return; const row = target.closest('[data-group]'); if (!row) return; if (target.dataset.field === 'enabled') { animateToggle(target); row.dataset.enabled = String(target.checked); } if (!row.querySelector('[data-field="condition"]').value.trim()) { status('空の条件は保存されません。条件を入力するか削除してください'); return; } markDirty(); });
+$('rules').addEventListener('pointerdown', event => { if (event.target.closest('.rule-remove') && event.button === 0) event.preventDefault(); });
 $('rules').addEventListener('input', event => {
   const slider = event.target;
+  if (slider.dataset.field === 'condition') {
+    slider.closest('[data-group]').dataset.emptyCondition = String(!slider.value.trim());
+    return;
+  }
   if (slider.dataset.field !== 'threshold-range') return;
   const row = slider.closest('[data-group]');
   const score = Math.round(Number(slider.value) * 100) / 100;
   row.querySelector('[data-field="threshold"]').value = String(score);
   row.querySelector('.threshold-value').textContent = score.toFixed(2);
 });
-document.addEventListener('click', event => {
-  if (activeScore && !event.target.closest?.('.rule-threshold')) closeScoreEditor();
-});
-document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && event.target.matches?.('[data-field="threshold-range"]')) { event.preventDefault(); closeScoreEditor({ restoreFocus: true }); }
-});
-
 $('save')?.addEventListener('click', () => { void saveConfig(); });
 document.addEventListener('input', event => {
   if (event.target.matches('input:not(#apiKey):not(#import):not(#enabled), textarea')) markDirty();
