@@ -13,6 +13,7 @@ const cancelFrame = id => (window.cancelAnimationFrame ? window.cancelAnimationF
 const $ = id => document.getElementById(id);
 let statusTimer = 0;
 const feedbackStates = new WeakMap();
+const keyViewAnimations = new WeakMap();
 function setFeedbackText(element, message, onHidden) {
   const previous = feedbackStates.get(element);
   const visible = element.classList.contains('feedback-visible');
@@ -148,6 +149,21 @@ function decorateButtons() {
   }
 }
 const hasSavedKey = () => Boolean(config.keyConfiguredByProvider?.[config.provider] ?? config.keyConfigured);
+function animateKeyElements(elements) {
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  for (const element of elements.filter(Boolean)) {
+    keyViewAnimations.get(element)?.cancel();
+    keyViewAnimations.delete(element);
+    if (reducedMotion || element.hidden || !element.animate) continue;
+    const animation = element.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: 'ease-out', fill: 'both' });
+    keyViewAnimations.set(element, animation);
+    animation.finished.then(() => {
+      if (keyViewAnimations.get(element) !== animation) return;
+      animation.cancel();
+      keyViewAnimations.delete(element);
+    }, () => { if (keyViewAnimations.get(element) === animation) keyViewAnimations.delete(element); });
+  }
+}
 function markDirty() {
   updateDirtyState();
   status('');
@@ -310,7 +326,7 @@ function renderUsageLimitInputs() {
     $('resetInputPrice').dataset.tooltip = `初期値：入力単価USD ${DEFAULT_INPUT_PRICE_PER_MILLION}／100万トークン、5時間USD 0.06、1日USD 0.10、7日間USD 0.50`;
   }
 }
-function renderKeyView() {
+function renderKeyView(animate = false, animateModel = false) {
   renderFilterStatus();
   const saved = hasSavedKey();
   if ($('apiKeyRow')) $('apiKeyRow').hidden = saved && !keyEditing;
@@ -320,15 +336,19 @@ function renderKeyView() {
   if ($('saveApiKey')) $('saveApiKey').hidden = saved && !keyEditing;
   if (!keyEditing) keyStatus(saved ? '保存済み' : '未設定');
   if ($('key-usage-note')) $('key-usage-note').hidden = config.provider !== 'typesafe' || (!keyEditing && saved);
+  if (animate) {
+    const view = $('apiKeyRow')?.closest('.connection-grid');
+    animateKeyElements([view, ...(animateModel ? [$('model')] : [])]);
+  }
 }
 let verificationId = 0;
-function render() {
+function render(animateKeyView = false) {
   verificationId++;
   clearToggleMotion($('enabled'));
   $('enabled').checked = config.enabled;
   if ($('enabledLabel')) $('enabledLabel').textContent = config.enabled ? '有効' : '無効';
   $('provider').value = config.provider;
-  renderKeyView();
+  renderKeyView(animateKeyView);
   $('model').value = config.model;
   if ($('inputPricePerMillion')) $('inputPricePerMillion').value = config.inputPricePerMillion ?? '';
   if ($('billingCurrency')) $('billingCurrency').value = config.billingCurrency;
@@ -386,9 +406,9 @@ function render() {
 }
 const stickyHeader = document.querySelector('.sticky-header');
 if (stickyHeader && 'ResizeObserver' in window) new ResizeObserver(([entry]) => document.documentElement.style.setProperty('--sticky-header-height', `${entry.target.getBoundingClientRect().height}px`)).observe(stickyHeader);
-function renderPreservingScroll() {
+function renderPreservingScroll(animateKeyView = false) {
   const scrollTop = document.body.scrollTop;
-  render();
+  render(animateKeyView);
   document.body.scrollTop = scrollTop;
 }
 function animateAddedRule(group, id) {
@@ -460,8 +480,9 @@ async function saveConfig() {
     appliedConfig = snapshot;
     read();
     activeRule = null;
+    const keyWasSaved = hasSavedKey();
     const failedActions = await executePendingActions(pendingSnapshot);
-    renderPreservingScroll();
+    renderPreservingScroll(keyWasSaved !== hasSavedKey());
     status(failedActions.length ? `設定を保存しました。一部の操作に失敗しました：${failedActions.join('、')}` : '設定を保存しました', true);
   } catch { status('設定を保存できませんでした', true); }
   finally { saving = false; $('enabled').disabled = false; updateDirtyState(); }
@@ -526,8 +547,9 @@ async function saveApiKey() {
     $('apiKey').value = '';
     keyEditing = false;
     status('APIキーを保存しました', true);
-    renderKeyView();
+    renderKeyView(true);
     keyStatus(`保存済み（${keyMessage(result)}）`);
+    $('changeApiKey').focus();
   } catch { keyStatus('保存できませんでした。接続を確認して再試行してください'); }
   finally { $('saveApiKey').disabled = false; }
 }
@@ -710,9 +732,9 @@ document.addEventListener('input', event => {
 });
 
 $('saveApiKey')?.addEventListener('click', () => { void saveApiKey(); });
-$('provider').onchange = () => { verificationId++; verifiedConnection = null; verificationResult = null; $('apiKey').value = ''; config.provider = $('provider').value; config.keyConfigured = Boolean(config.keyConfiguredByProvider?.[config.provider]); keyEditing = false; renderKeyView(); if ($('provider').value === 'openrouter' && (!$('model').value || $('model').value === 'jev-latest')) $('model').value = OPENROUTER_DEFAULT_MODEL; else if ($('provider').value === 'typesafe' && ($('model').value === OPENROUTER_DEFAULT_MODEL || $('model').value === 'typesafe/jev-1.13')) $('model').value = 'jev-latest'; markDirty(); };
-$('changeApiKey')?.addEventListener('click', () => { keyEditing = true; $('apiKey').value = ''; renderKeyView(); keyStatus('未確認'); $('apiKey').focus(); });
-$('cancelApiKey')?.addEventListener('click', () => { keyEditing = false; $('apiKey').value = ''; renderKeyView(); });
+$('provider').onchange = () => { verificationId++; verifiedConnection = null; verificationResult = null; $('apiKey').value = ''; config.provider = $('provider').value; config.keyConfigured = Boolean(config.keyConfiguredByProvider?.[config.provider]); keyEditing = false; if ($('provider').value === 'openrouter' && (!$('model').value || $('model').value === 'jev-latest')) $('model').value = OPENROUTER_DEFAULT_MODEL; else if ($('provider').value === 'typesafe' && ($('model').value === OPENROUTER_DEFAULT_MODEL || $('model').value === 'typesafe/jev-1.13')) $('model').value = 'jev-latest'; renderKeyView(true, true); markDirty(); };
+$('changeApiKey')?.addEventListener('click', () => { keyEditing = true; $('apiKey').value = ''; renderKeyView(true); keyStatus('未確認'); $('apiKey').focus(); });
+$('cancelApiKey')?.addEventListener('click', () => { keyEditing = false; $('apiKey').value = ''; renderKeyView(true); $('changeApiKey').focus(); });
 $('apiKey').oninput = () => { verificationId++; keyStatus('未確認'); };
  $('deleteApiKey')?.addEventListener('click', () => { if (saving) return; const provider = $('provider').value; pendingActions.apiKeyDelete.add(provider); markDirty(); status('APIキー削除を保存時に実行します'); });
 $('billingCurrency')?.addEventListener('change', () => { read(); renderUsageLimitInputs(); markDirty(); });
