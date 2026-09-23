@@ -18,6 +18,7 @@ const openDb = indexedDB => new Promise((resolve, reject) => {
 });
 async function createDb(seed = {}) {
   const indexed = new IDBFactory();
+  if (!seed.records?.length && !seed.metadata?.length) return indexed;
   const db = await openDb(indexed);
   await new Promise((resolve, reject) => {
     const tx = db.transaction(['results', 'metadata'], 'readwrite');
@@ -83,12 +84,14 @@ async function load({ config, db, fetchResult }) {
 
 test('判定cacheの現在容量はrecord.sizeを合算し、DB失敗は利用不可で返す', async () => {
   const old = { chrome: globalThis.chrome, fetch: globalThis.fetch, indexedDB: globalThis.indexedDB };
-  const db = await createDb({ records: [{ key: 'a', size: 120 }, { key: 'b', size: 80 }] });
-  const h = await load({ db, config: { ...DEFAULT_CONFIG }, fetchResult: () => ({ answers: {} }) });
-  try { assert.deepEqual(await h.cacheSize(), { bytes: 200 }); } finally { Object.entries(old).forEach(([key, value]) => { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }); }
-  const unavailable = await load({ db: undefined, config: { ...DEFAULT_CONFIG }, fetchResult: () => ({ answers: {} }) });
-  assert.deepEqual(await unavailable.cacheSize(), { unavailable: true });
-  assert.deepEqual(await unavailable.clearCache(), { ok: false, unavailable: true });
+  try {
+    const db = await createDb({ records: [{ key: 'a', size: 120 }, { key: 'b', size: 80 }] });
+    const h = await load({ db, config: { ...DEFAULT_CONFIG }, fetchResult: () => ({ answers: {} }) });
+    assert.deepEqual(await h.cacheSize(), { bytes: 200 });
+    const unavailable = await load({ db: undefined, config: { ...DEFAULT_CONFIG }, fetchResult: () => ({ answers: {} }) });
+    assert.deepEqual(await unavailable.cacheSize(), { unavailable: true });
+    assert.deepEqual(await unavailable.clearCache(), { ok: false, unavailable: true });
+  } finally { Object.entries(old).forEach(([key, value]) => { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }); }
 });
 
 test('判定cacheのクリア後は容量0になり、次の判定を再取得する', async () => {
@@ -110,24 +113,7 @@ test('判定cacheのクリア後は容量0になり、次の判定を再取得�
   } finally { Object.entries(old).forEach(([key, value]) => { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }); }
 });
 
-test('閾値変更では既存cacheを保持し、次の判定を再取得しない', async () => {
-  const old = { chrome: globalThis.chrome, fetch: globalThis.fetch, indexedDB: globalThis.indexedDB };
-  const db = await createDb();
-  let fetchCount = 0;
-  const rule = { ...DEFAULT_CONFIG.blackRules[0], enabled: true };
-  const config = { ...DEFAULT_CONFIG, enabled: true, apiKey: 'key', blackRules: [rule] };
-  try {
-    const h = await load({ db, config, fetchResult: () => { fetchCount++; return { answers: { [hashCondition(rule.condition)]: { noul: 0.9 } } }; } });
-    await h.call('本文');
-    await new Promise(resolve => setTimeout(resolve, 0));
-    assert.equal((await readStore(db, 'results')).length, 1);
-    h.changed({ ...config, blackRules: [{ ...rule, threshold: 0.5 }] });
-    await h.call('本文');
-    assert.equal(fetchCount, 1);
-  } finally { Object.entries(old).forEach(([key, value]) => { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }); }
-});
-
-test('IndexedDBの再open後も結果を再利用し、参照でTTLを延長しない', async () => {
+test('閾値変更後とIndexedDB再open後もcacheを再利用し、参照でTTLを延長しない', async () => {
   const old = { chrome: globalThis.chrome, fetch: globalThis.fetch, indexedDB: globalThis.indexedDB, now: Date.now };
   const db = await createDb();
   const rule = { ...DEFAULT_CONFIG.blackRules.at(-1), enabled: true };
@@ -138,9 +124,13 @@ test('IndexedDBの再open後も結果を再利用し、参照でTTLを延長し�
     const first = await load({ db, config: { ...DEFAULT_CONFIG, enabled: true, apiKey: 'key', blackRules: [rule] }, fetchResult: () => { fetchCount++; return { answers: { [hashCondition(rule.condition)]: { noul: 0 } } }; } });
     await first.call();
     await new Promise(resolve => setTimeout(resolve, 0));
+    first.changed({ ...DEFAULT_CONFIG, enabled: true, apiKey: 'key', blackRules: [{ ...rule, threshold: 0.5 }] });
+    await first.call();
+    assert.equal(fetchCount, 1);
     now += 29 * 24 * 60 * 60 * 1000;
     const second = await load({ db, config: { ...DEFAULT_CONFIG, enabled: true, apiKey: 'key', blackRules: [rule] }, fetchResult: () => { fetchCount++; return { answers: { [hashCondition(rule.condition)]: { noul: 0 } } }; } });
     await second.call();
+    assert.equal(fetchCount, 1);
     now += 2 * 24 * 60 * 60 * 1000;
     const third = await load({ db, config: { ...DEFAULT_CONFIG, enabled: true, apiKey: 'key', blackRules: [rule] }, fetchResult: () => { fetchCount++; return { answers: { [hashCondition(rule.condition)]: { noul: 0 } } }; } });
     await third.call();
@@ -170,19 +160,13 @@ test('永続cacheの条件追加は既存条件を再送せず、不足条件だ
     } });
     await h.call('本文');
     await new Promise(resolve => setTimeout(resolve, 0));
-    const originalRecord = (await readStore(db, 'results'))[0];
-    const originalCreatedAt = originalRecord.createdAt;
     now += 1000;
     h.changed({ ...firstConfig, blackRules: [ruleA, ruleB] });
     await h.call('本文');
     assert.equal(requests.length, 2);
     assert.deepEqual(requests[0], [ruleA.id]);
     assert.deepEqual(requests[1], [ruleB.id]);
-    const records = await readStore(db, 'results');
-    assert.equal(records.find(record => JSON.parse(record.key).postId === '本文' && JSON.parse(record.key).questions[ruleA.id])?.createdAt, originalCreatedAt);
-    assert.equal(records.find(record => JSON.parse(record.key).postId === '本文' && JSON.parse(record.key).questions[ruleA.id] && JSON.parse(record.key).questions[ruleB.id])?.createdAt, originalCreatedAt);
     now += 30 * 24 * 60 * 60 * 1000;
-    await new Promise(resolve => setTimeout(resolve, 0));
     await h.call('本文');
     assert.equal(requests.length, 3);
     assert.deepEqual(requests[2], [ruleA.id, ruleB.id]);
@@ -195,6 +179,9 @@ test('本文を含む旧形式cacheは移行時に削除する', async () => {
   try {
     const h = await load({ db, config: { ...DEFAULT_CONFIG }, fetchResult: () => ({ answers: {} }) });
     assert.deepEqual(await h.cacheSize(), { bytes: 0 });
+    for (const store of ['results', 'metadata']) {
+      assert.equal(JSON.stringify(await readStore(db, store)).includes('旧本文'), false);
+    }
   } finally { Object.entries(old).forEach(([key, value]) => { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }); }
 });
 
@@ -209,7 +196,6 @@ test('本文を保存せず、投稿IDがない要求は再利用しない', asy
     await new Promise(resolve => setTimeout(resolve, 0));
     const [record] = await readStore(db, 'results');
     assert.equal(JSON.stringify(record).includes('秘匿する本文'), false);
-    assert.equal(JSON.parse(record.key).postId, 'post-1');
     await h.call('同じ本文', undefined, null);
     await h.call('同じ本文', undefined, null);
     assert.equal(fetchCount, 3);

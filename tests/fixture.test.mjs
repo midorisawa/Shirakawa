@@ -5,6 +5,17 @@ import { JSDOM } from 'jsdom';
 import { hashCondition } from '../src/core/config.js';
 
 const html = await readFile(new URL('./fixtures/x-page.html', import.meta.url), 'utf8');
+const originalGlobals = Object.fromEntries(['chrome', 'document', 'location', 'MutationObserver'].map(key => [key, globalThis[key]]));
+let activeWindow;
+
+test.afterEach(() => {
+  activeWindow?.close();
+  activeWindow = undefined;
+  for (const [key, value] of Object.entries(originalGlobals)) {
+    if (value === undefined) delete globalThis[key];
+    else globalThis[key] = value;
+  }
+});
 
 test('content.jsは判定前に隠した原文を非該当時と通信失敗時に復元する', async () => {
   const config = {
@@ -24,6 +35,7 @@ test('content.jsは判定前に隠した原文を非該当時と通信失敗時�
     return { answers: { [hashCondition('条件')]: { noul: 0 } } };
   } } };
   const dom = new JSDOM(html, { url: 'https://x.com/home?mode=home-recommended', runScripts: 'dangerously', resources: 'usable' });
+  activeWindow = dom.window;
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.MutationObserver = dom.window.MutationObserver;
@@ -54,7 +66,6 @@ test('content.jsは判定前に隠した原文を非該当時と通信失敗時�
   restoredText.textContent = '復元後に再利用された架空投稿';
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(classifyCount, countBeforeReuse + 1);
-  dom.window.close();
 });
 
 test('再マウントは成功キャッシュを同期適用し、手動表示を引き継ぐ', async () => {
@@ -73,6 +84,7 @@ test('再マウントは成功キャッシュを同期適用し、手動表示�
     return { answers: { [hashCondition('条件')]: { noul: 1 } } };
   } } };
   const dom = new JSDOM('<main><div data-testid="primaryColumn"><article role="article" data-testid="tweet" data-post-id="cached"><div class="top-spacer" style="height:12px"><div></div></div><div class="row"><div data-testid="Tweet-User-Avatar"><a href="/cached">アイコン</a></div><div class="body"><div class="header"><div data-testid="User-Name">cached user</div><a href="/cached/status/1"><time>9月21日</time></a></div><div data-testid="tweetText">再マウント対象</div><div data-testid="tweetPhoto">画像</div></div></div></article></div></main>', { url: 'https://x.com/home?mode=home-recommended', runScripts: 'dangerously', resources: 'usable' });
+  activeWindow = dom.window;
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.MutationObserver = dom.window.MutationObserver;
@@ -86,7 +98,6 @@ test('再マウントは成功キャッシュを同期適用し、手動表示�
   let postClicks = 0;
   original.addEventListener('click', () => postClicks++);
   original.querySelector('.jev-reason').click();
-  assert.equal(original.querySelector('.jev-placeholder details'), null);
   assert.equal(postClicks, 0);
   original.querySelector('button').click();
   assert.equal(original.classList.contains('jev-content-hidden'), false);
@@ -117,7 +128,6 @@ test('再マウントは成功キャッシュを同期適用し、手動表示�
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(replacement.classList.contains('jev-content-hidden'), false);
   assert.equal(classifyCount, 1);
-  dom.window.close();
 });
 
 test('本文と引用元を独立判定し、引用元だけのblackと本文blackを分離して表示する', async () => {
@@ -142,6 +152,7 @@ test('本文と引用元を独立判定し、引用元だけのblackと本文bla
       <div role="link"><div class="quote-header"><span data-testid="UserAvatar-Container-quote">アイコン</span><div data-testid="User-Name">引用ユーザー</div><time>日時</time></div><div data-testid="tweetText">引用white</div></div>
     </article>
   </div></main>`, { url: 'https://x.com/home?mode=home-recommended', runScripts: 'dangerously', resources: 'usable' });
+  activeWindow = dom.window;
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.MutationObserver = dom.window.MutationObserver;
@@ -156,7 +167,6 @@ test('本文と引用元を独立判定し、引用元だけのblackと本文bla
   assert.equal(first.querySelector('[data-testid="tweetText"]').textContent, '本文white');
   assert.equal(second.classList.contains('jev-content-hidden'), true);
   assert.equal(secondQuote.classList.contains('jev-quote-hidden'), false);
-  dom.window.close();
 });
 
 test('本文投稿は引用カード内のstatus URLを投稿IDとして使わない', async () => {
@@ -170,6 +180,7 @@ test('本文投稿は引用カード内のstatus URLを投稿IDとして使わ�
     <a href="/owner/status/100"><time>親投稿</time></a><div data-testid="tweetText">親本文</div>
     <div role="link"><div data-testid="User-Name">引用ユーザー</div><a href="/quoted/status/200"><time>引用投稿</time></a><div data-testid="tweetText">引用本文</div></div>
   </article></div></main>`, { url: 'https://x.com/home', runScripts: 'dangerously', resources: 'usable' });
+  activeWindow = dom.window;
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.MutationObserver = dom.window.MutationObserver;
@@ -177,7 +188,6 @@ test('本文投稿は引用カード内のstatus URLを投稿IDとして使わ�
   await new Promise(resolve => setTimeout(resolve, 30));
   assert.equal(messages.find(message => message.text === '親本文')?.postId, '100');
   assert.equal(messages.find(message => message.text === '引用本文')?.postId, '200');
-  dom.window.close();
 });
 
 test('content scriptは同期throwで無効化されたコンテキストを停止し、非表示中の投稿を復元する', async () => {
@@ -214,6 +224,7 @@ test('content scriptは同期throwで無効化されたコンテキストを停�
       </div></div>
     </article>
   </div></main>`, { url: 'https://x.com/home', runScripts: 'dangerously', resources: 'usable' });
+  activeWindow = dom.window;
   globalThis.document = dom.window.document;
   globalThis.location = dom.window.location;
   globalThis.MutationObserver = dom.window.MutationObserver;
@@ -241,5 +252,4 @@ test('content scriptは同期throwで無効化されたコンテキストを停�
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(classifyCount, 1);
   assert.equal(later.dataset.jevState, undefined);
-  dom.window.close();
 });

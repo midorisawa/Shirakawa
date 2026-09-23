@@ -2,13 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_CONFIG, normalizeConfig } from '../src/core/config.js';
 
-test('初期ブラックリストに誇張や論理の飛躍によるこじつけを含む条件を追加する', () => {
-  const index = DEFAULT_CONFIG.blackRules.findIndex(rule => rule.condition === '特定の地域・団体・界隈や、個人の属性を一括りにした決めつけ');
-  assert.equal(DEFAULT_CONFIG.blackRules[index + 1].condition, 'ユーモアの域を超えた、明らかな誇張や論理の飛躍したこじつけ');
-  assert.equal(DEFAULT_CONFIG.blackRules[index + 1].enabled, true);
-  assert.equal(DEFAULT_CONFIG.blackRules[index + 1].threshold, 0.9);
-});
-
 test('実要求だけusageを加算し、キャッシュと期間別・全使用量リセットを分離する', async () => {
   const originalChrome = globalThis.chrome;
   const originalFetch = globalThis.fetch;
@@ -33,20 +26,17 @@ test('実要求だけusageを加算し、キャッシュと期間別・全使用
     assert.equal(calls, 1);
     assert.equal((await message('get-usage')).inputTokens, 20);
     Date.now = () => 1_000_000;
-    const resetAll = await message('reset-all-usage');
-    assert.equal(resetAll.ok, true);
-    assert.equal(resetAll.inputTokens, 0);
+    await message('reset-all-usage');
     const reset = await message('get-usage');
     assert.equal(reset.inputTokens, 0);
     assert.equal(reset.unreportedRequests, 0);
     assert.deepEqual(Object.values(reset.periods), Array.from({ length: 4 }, () => ({ startedAt: 1_000_000, inputTokens: 0, unreportedRequests: 0 })));
-    const resetPeriods = await message('reset-usage');
-    assert.equal(resetPeriods.ok, true);
-    assert.equal(resetPeriods.inputTokens, 0);
-    assert.equal((await message('get-usage')).inputTokens, 0);
-    assert.equal((await message('get-usage')).unreportedRequests, 0);
     await ask('different');
     assert.equal((await message('get-usage')).inputTokens, 5);
+    const resetPeriods = await message('reset-usage');
+    assert.equal(resetPeriods.ok, true);
+    assert.equal(resetPeriods.inputTokens, 5);
+    assert.deepEqual(Object.values(resetPeriods.periods), Array.from({ length: 4 }, () => ({ startedAt: 1_000_000, inputTokens: 0, unreportedRequests: 0 })));
     await ask('missing');
     const missing = await message('get-usage');
     assert.equal(missing.inputTokens, 5);

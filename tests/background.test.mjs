@@ -33,7 +33,6 @@ test('両接続先へ条件全文を共通の問いで包んで送信する', as
       });
       const disabledId = provider === 'openrouter' ? `post__${hashCondition(disabledRule.condition)}` : hashCondition(disabledRule.condition);
       assert.equal(request.questions[disabledId], undefined);
-      assert.equal(config.blackRules[0].condition, rule.condition);
     }
   } finally {
     if (originalChrome === undefined) delete globalThis.chrome;

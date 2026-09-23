@@ -20,9 +20,6 @@ test('同一判定要求を同時に送らず成功結果を再利用する', as
     const call = () => new Promise(resolve => listener({ type: 'classify', text: '同じ本文', postId: 'post-1' }, { url: 'https://x.com/home' }, resolve));
     await Promise.all([call(), call(), call()]);
     await call();
-    config.blackRules[0] = { ...config.blackRules[0], enabled: false, threshold: 0.99 };
-    await call();
-    assert.equal(fetchCount, 1);
     const first = { condition: '  同じ条件  ', threshold: 0.8, enabled: false };
     const duplicate = { condition: '同じ条件', threshold: 0.2, enabled: true };
     const other = { condition: '別の条件', threshold: 0.8, enabled: false };

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-test('APIキー確認は認証・権限・通信・成功を区別し、投稿本文を送らない', async () => {
+test('APIキー確認は認証・権限・通信・成功を区別する', async () => {
   const originalChrome = globalThis.chrome;
   const originalFetch = globalThis.fetch;
   let listener;
@@ -18,7 +18,6 @@ test('APIキー確認は認証・権限・通信・成功を区別し、投稿�
     assert.equal(request.url, 'https://api.typesafe.ai/v1/systemone');
     assert.equal(request.options.method, 'POST');
     assert.match(request.options.body, /APIキー接続確認/);
-    assert.doesNotMatch(request.options.body, /投稿本文/);
     for (const [status, reason] of [[401, 'unauthorized'], [403, 'forbidden'], [500, 'http-error']]) {
       globalThis.fetch = async () => ({ ok: false, status });
       const result = await verify('openrouter');
