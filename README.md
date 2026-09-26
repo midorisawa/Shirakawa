@@ -14,9 +14,7 @@
   <a href="https://github.com/midorisawa/Shirakawa/releases"><img src="https://img.shields.io/github/v/release/midorisawa/Shirakawa?color=506b82" alt="Latest release"></a>
   <a href="https://github.com/midorisawa/Shirakawa/actions/workflows/release.yml"><img src="https://github.com/midorisawa/Shirakawa/actions/workflows/release.yml/badge.svg?branch=main" alt="Build and test"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6b7785.svg" alt="MIT License"></a>
-  <a href="https://typesafe.ai"><img src="https://img.shields.io/badge/Powered%20by-Jev-506b82.svg" alt="Powered by Jev"></a>
-  <a href="https://chromewebstore.google.com/detail/shirakawa/gnlkgpphbjmbfpgbicaebhlmacnnhmmf"><img src="https://img.shields.io/badge/Chrome%20Web%20Store-Install-4285F4?logo=googlechrome&logoColor=white" alt="Install from the Chrome Web Store"></a>
-  <img src="https://img.shields.io/badge/Chrome-Edge-6b7785.svg?logo=googlechrome&logoColor=white" alt="Chrome and Edge">
+  <a href="https://typesafe.ai"><img src="https://img.shields.io/badge/Uses-Jev-506b82.svg" alt="Uses Jev"></a>
 </p>
 
 Shirakawaは、AIモデル「Jev」を活用し、設定した条件に合うXの投稿を自動で非表示にするブラウザー拡張機能です。キーワードの一致だけではフィルタリングが難しい内容も、投稿本文の文脈や意味に基づいて柔軟に判定します。  
