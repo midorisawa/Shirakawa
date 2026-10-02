@@ -26,8 +26,8 @@
       <div class="connection-group">
         <div class="connection-grid">
           <label class="connection-label" for="provider">接続先</label>
-          <div class="connection-control"><select id="provider"><option value="typesafe">TypeSafe（Jev API）</option><option value="openrouter">OpenRouter（Jev）</option></select></div>
-          <p class="help-text">投稿の判定には選択したサービスのAPIキーが必要です。判定時に投稿本文と条件を送信します。</p>
+          <div class="connection-control"><select id="provider"><option value="typesafe">TypeSafe（Jev API）</option><option value="openrouter">OpenRouter（Jev）</option><option value="ollama">Ollama（ローカル）</option></select></div>
+          <p id="provider-note" class="help-text">投稿の判定には選択したサービスのAPIキーが必要です。判定時に投稿本文と条件を送信します。</p>
         </div>
       </div>
       <div class="connection-group">
@@ -35,12 +35,13 @@
           <div class="connection-label key-state"><span id="apiKeyLabel">APIキー</span><span id="keyStatus" class="status-label" aria-live="polite">取得中…</span></div>
           <p id="apiKeyRow" class="connection-control"><input id="apiKey" type="password" autocomplete="off" aria-labelledby="apiKeyLabel" aria-describedby="key-help"></p>
           <div class="button-row">
+            <button id="verifyLocal" class="button button-primary" type="button" hidden>接続を確認する</button>
             <button id="saveApiKey" class="button button-primary" type="button" hidden>接続を確認してキーを保存する</button>
             <button id="changeApiKey" class="button" type="button" hidden>APIキーを変更する</button>
             <button id="cancelApiKey" class="button" type="button" hidden>キーの変更をキャンセルする</button>
             <button id="deleteApiKey" class="button button-danger" type="button" hidden>APIキーを削除する</button>
           </div>
-          <p id="key-help" class="help-text">APIキーは「接続を確認してキーを保存」で個別に保存します。キーはブラウザ内にローカル保存され、選択したAPIサービス以外には送信されません。<span id="key-usage-note" hidden>接続確認時、API利用が発生します。</span></p>
+          <p id="key-help" class="help-text"><span id="key-note">APIキーは「接続を確認してキーを保存」で個別に保存します。キーはブラウザ内にローカル保存され、選択したAPIサービス以外には送信されません。</span><span id="key-usage-note" hidden>接続確認時、API利用が発生します。</span><span id="local-note" hidden>Ollamaを使う場合、APIキーは不要です。投稿本文と条件はこのPCのOllama（localhost:11434）にのみ送信されます。Ollamaの環境変数OLLAMA_ORIGINSにこの拡張機能のOrigin（chrome-extension://拡張機能ID）を設定し、nimbleを導入してください。</span></p>
         </div>
       </div>
       <div class="connection-group">

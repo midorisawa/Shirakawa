@@ -1,6 +1,9 @@
 export const CONFIG_VERSION = 2;
-export const PROVIDERS = { typesafe: 'TypeSafe（Jev API）', openrouter: 'OpenRouter（Jev）' };
+export const PROVIDERS = { typesafe: 'TypeSafe（Jev API）', openrouter: 'OpenRouter（Jev）', ollama: 'Ollama（ローカル）' };
+export const KEYLESS_PROVIDERS = new Set(['ollama']);
 export const OPENROUTER_DEFAULT_MODEL = '~typesafe/jev-latest';
+export const OLLAMA_DEFAULT_MODEL = 'nimble';
+export const OLLAMA_ORIGIN_PATTERN = 'http://localhost:11434/*';
 export const DEFAULT_INPUT_PRICE_PER_MILLION = 0.042;
 
 // 条件文を条件の永続的な識別子へ変換
@@ -70,7 +73,7 @@ export function normalizeConfig(input = {}) {
   value.inputPricePerMillion = price === null || price === ''
     ? (value.billingCurrency === 'USD' ? DEFAULT_INPUT_PRICE_PER_MILLION : null)
     : Number.isFinite(Number(price)) && Number(price) >= 0 ? Number(price) : null;
-  if (typeof value.model !== 'string' || !value.model.trim() || (value.provider === 'openrouter' && value.model === 'jev-latest')) value.model = value.provider === 'openrouter' ? OPENROUTER_DEFAULT_MODEL : 'jev-latest';
+  if (typeof value.model !== 'string' || !value.model.trim() || (value.provider === 'openrouter' && value.model === 'jev-latest') || (value.provider === 'ollama' && [DEFAULT_CONFIG.model, OPENROUTER_DEFAULT_MODEL].includes(value.model))) value.model = { openrouter: OPENROUTER_DEFAULT_MODEL, ollama: OLLAMA_DEFAULT_MODEL }[value.provider] ?? DEFAULT_CONFIG.model;
   value.version = CONFIG_VERSION;
   return value;
 }

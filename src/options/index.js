@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG, DEFAULT_INPUT_PRICE_PER_MILLION, OPENROUTER_DEFAULT_MODEL, exportConfig, importConfig, normalizeConfig } from '../core/config.js';
+import { DEFAULT_CONFIG, DEFAULT_INPUT_PRICE_PER_MILLION, KEYLESS_PROVIDERS, OLLAMA_DEFAULT_MODEL, OLLAMA_ORIGIN_PATTERN, OPENROUTER_DEFAULT_MODEL, exportConfig, importConfig, normalizeConfig } from '../core/config.js';
 let config = DEFAULT_CONFIG;
 let verifiedConnection = null;
 let verificationResult = null;
@@ -328,6 +328,19 @@ function renderUsageLimitInputs() {
 }
 function renderKeyView(animate = false, animateModel = false) {
   renderFilterStatus();
+  const keyless = KEYLESS_PROVIDERS.has(config.provider);
+  if ($('apiKeyLabel')) $('apiKeyLabel').textContent = keyless ? '接続状態' : 'APIキー';
+  if ($('verifyLocal')) $('verifyLocal').hidden = !keyless;
+  if ($('local-note')) $('local-note').hidden = !keyless;
+  if ($('key-note')) $('key-note').hidden = keyless;
+  if ($('provider-note')) $('provider-note').hidden = keyless;
+  if (keyless) {
+    for (const id of ['apiKeyRow', 'changeApiKey', 'cancelApiKey', 'deleteApiKey', 'saveApiKey']) if ($(id)) $(id).hidden = true;
+    if ($('key-usage-note')) $('key-usage-note').hidden = true;
+    if ($('keyStatus').textContent === '取得中…') keyStatus('未確認');
+    if (animate) animateKeyElements([$('apiKeyRow')?.closest('.connection-grid'), ...(animateModel ? [$('model')] : [])]);
+    return;
+  }
   const saved = hasSavedKey();
   if ($('apiKeyRow')) $('apiKeyRow').hidden = saved && !keyEditing;
   if ($('changeApiKey')) $('changeApiKey').hidden = !saved || keyEditing;
@@ -554,6 +567,12 @@ async function saveApiKey() {
   finally { $('saveApiKey').disabled = false; }
 }
 function keyMessage(result) {
+  if (KEYLESS_PROVIDERS.has(config.provider)) {
+    if (result?.ok) return '接続できました';
+    if (result?.reason === 'forbidden') return `Ollamaが接続を拒否しました（OLLAMA_ORIGINSにchrome-extension://${chrome.runtime.id}を設定してください）`;
+    if (result?.reason === 'network-error') return 'Ollamaに接続できません（起動状態とlocalhost:11434への接続許可を確認してください）';
+    if (result?.status === 404) return `モデルが見つかりません（ollama pull ${$('model').value || OLLAMA_DEFAULT_MODEL} を実行してください）`;
+  }
   if (result?.ok) return '有効';
   if (result?.reason === 'unauthorized') return '認証失敗（キーを確認してください）';
   if (result?.reason === 'forbidden') return '権限不足（キーの権限を確認してください）';
@@ -731,8 +750,25 @@ document.addEventListener('input', event => {
   if (event.target.matches('input:not(#apiKey):not(#import):not(#enabled), textarea')) markDirty();
 });
 
+async function verifyLocalConnection() {
+  const requestId = ++verificationId;
+  if ($('verifyLocal')) $('verifyLocal').disabled = true;
+  try {
+    keyStatus('確認中…');
+    let granted = false;
+    try { granted = await chrome.permissions.request({ origins: [OLLAMA_ORIGIN_PATTERN] }); } catch { granted = false; }
+    if (requestId !== verificationId) return;
+    if (!granted) { keyStatus('localhost:11434への接続が許可されていません'); return; }
+    let result;
+    try { result = await chrome.runtime.sendMessage({ type: 'verify-api-key', provider: 'ollama', apiKey: '', model: $('model').value }); }
+    catch { result = { reason: 'network-error' }; }
+    if (requestId !== verificationId) return;
+    keyStatus(keyMessage(result));
+  } finally { if ($('verifyLocal')) $('verifyLocal').disabled = false; }
+}
+$('verifyLocal')?.addEventListener('click', () => { void verifyLocalConnection(); });
 $('saveApiKey')?.addEventListener('click', () => { void saveApiKey(); });
-$('provider').onchange = () => { verificationId++; verifiedConnection = null; verificationResult = null; $('apiKey').value = ''; config.provider = $('provider').value; config.keyConfigured = Boolean(config.keyConfiguredByProvider?.[config.provider]); keyEditing = false; if ($('provider').value === 'openrouter' && (!$('model').value || $('model').value === 'jev-latest')) $('model').value = OPENROUTER_DEFAULT_MODEL; else if ($('provider').value === 'typesafe' && ($('model').value === OPENROUTER_DEFAULT_MODEL || $('model').value === 'typesafe/jev-1.13')) $('model').value = 'jev-latest'; renderKeyView(true, true); markDirty(); };
+$('provider').onchange = () => { verificationId++; verifiedConnection = null; verificationResult = null; $('apiKey').value = ''; config.provider = $('provider').value; config.keyConfigured = Boolean(config.keyConfiguredByProvider?.[config.provider]); keyEditing = false; const otherModels = [OLLAMA_DEFAULT_MODEL, OPENROUTER_DEFAULT_MODEL, 'jev-latest', 'typesafe/jev-1.13']; if ($('provider').value === 'openrouter' && (!$('model').value || $('model').value === 'jev-latest' || $('model').value === OLLAMA_DEFAULT_MODEL)) $('model').value = OPENROUTER_DEFAULT_MODEL; else if ($('provider').value === 'typesafe' && ($('model').value === OPENROUTER_DEFAULT_MODEL || $('model').value === 'typesafe/jev-1.13' || $('model').value === OLLAMA_DEFAULT_MODEL)) $('model').value = 'jev-latest'; else if ($('provider').value === 'ollama' && (!$('model').value || otherModels.includes($('model').value))) $('model').value = OLLAMA_DEFAULT_MODEL; renderKeyView(true, true); markDirty(); if (KEYLESS_PROVIDERS.has(config.provider)) keyStatus('未確認'); };
 $('changeApiKey')?.addEventListener('click', () => { keyEditing = true; $('apiKey').value = ''; renderKeyView(true); keyStatus('未確認'); $('apiKey').focus(); });
 $('cancelApiKey')?.addEventListener('click', () => { keyEditing = false; $('apiKey').value = ''; renderKeyView(true); $('changeApiKey').focus(); });
 $('apiKey').oninput = () => { verificationId++; keyStatus('未確認'); };

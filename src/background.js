@@ -1,8 +1,13 @@
-import { DEFAULT_CONFIG, OPENROUTER_DEFAULT_MODEL, normalizeConfig } from './core/config.js';
+import { DEFAULT_CONFIG, KEYLESS_PROVIDERS, OLLAMA_DEFAULT_MODEL, OPENROUTER_DEFAULT_MODEL, normalizeConfig } from './core/config.js';
 import { validAnswer } from './core/filter.js';
 
-const endpoints = { typesafe: 'https://api.typesafe.ai/v1/systemone', openrouter: 'https://openrouter.ai/api/alpha/decisions' };
-const verifyEndpoints = { typesafe: 'https://api.typesafe.ai/v1/systemone', openrouter: 'https://openrouter.ai/api/v1/key' };
+const OLLAMA_ENDPOINT = 'http://localhost:11434/v1/systemone';
+const endpoints = { typesafe: 'https://api.typesafe.ai/v1/systemone', openrouter: 'https://openrouter.ai/api/alpha/decisions', ollama: OLLAMA_ENDPOINT };
+const verifyEndpoints = { typesafe: 'https://api.typesafe.ai/v1/systemone', openrouter: 'https://openrouter.ai/api/v1/key', ollama: OLLAMA_ENDPOINT };
+const KEYLESS_CREDENTIAL = 'keyless';
+const REQUEST_TIMEOUT_MS = { ollama: 120000 };
+const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+const authHeaders = (provider, apiKey) => KEYLESS_PROVIDERS.has(provider) ? {} : { Authorization: `Bearer ${apiKey}` };
 const KEY_STORAGE = 'jevApiKeys';
 const KEY_ACCESS = 'TRUSTED_CONTEXTS';
 let storageReady;
@@ -43,6 +48,7 @@ async function getConfig() {
   return config;
 }
 async function getApiKey(provider) {
+  if (KEYLESS_PROVIDERS.has(provider)) return KEYLESS_CREDENTIAL;
   await initializeStorage();
   const local = (await chrome.storage.local.get(KEY_STORAGE))[KEY_STORAGE] || {};
   return typeof local[provider] === 'string' ? local[provider] : '';
@@ -73,7 +79,7 @@ async function saveConfig(rawConfig) {
   usageQueue = operation.catch(() => undefined);
   return operation;
 }
-async function keyConfiguredByProvider() { const keys = (await chrome.storage.local.get(KEY_STORAGE))[KEY_STORAGE] || {}; return Object.fromEntries(Object.keys(endpoints).map(provider => [provider, typeof keys[provider] === 'string' && Boolean(keys[provider])])); }
+async function keyConfiguredByProvider() { const keys = (await chrome.storage.local.get(KEY_STORAGE))[KEY_STORAGE] || {}; return Object.fromEntries(Object.keys(endpoints).map(provider => [provider, KEYLESS_PROVIDERS.has(provider) || (typeof keys[provider] === 'string' && Boolean(keys[provider]))])); }
 async function publicConfig(config, keyStatus = false) { return { ...config, keyConfigured: keyStatus, keyConfiguredByProvider: await keyConfiguredByProvider() }; }
 async function notifyConfig() {
   actionError = false;
@@ -86,19 +92,21 @@ async function notifyConfig() {
     await Promise.allSettled(tabs.filter(tab => Number.isInteger(tab.id)).map(tab => chrome.tabs.sendMessage(tab.id, message)));
   } catch {}
 }
-const API_CONCURRENCY = 2;
+const API_CONCURRENCY = { ollama: 1 };
+const DEFAULT_API_CONCURRENCY = 2;
 let apiOrder = 0;
 let apiActive = 0;
 const apiPending = [];
-function enqueueApi(task, priority = 1) {
+function enqueueApi(task, priority = 1, provider) {
   return new Promise((resolve, reject) => {
-    apiPending.push({ task, priority: Number.isFinite(priority) ? Math.max(0, Math.min(2, priority)) : 1, order: apiOrder++, resolve, reject });
+    apiPending.push({ task, priority: Number.isFinite(priority) ? Math.max(0, Math.min(2, priority)) : 1, order: apiOrder++, provider, resolve, reject });
     pumpApi();
   });
 }
 function pumpApi() {
-  while (apiActive < API_CONCURRENCY && apiPending.length) {
+  while (apiPending.length) {
     apiPending.sort((a, b) => a.priority - b.priority || a.order - b.order);
+    if (apiActive >= (API_CONCURRENCY[apiPending[0].provider] ?? DEFAULT_API_CONCURRENCY)) break;
     const item = apiPending.shift();
     apiActive++;
     Promise.resolve().then(item.task).then(item.resolve, item.reject).finally(() => { apiActive--; pumpApi(); });
@@ -330,7 +338,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'delete-api-key') { deleteApiKey(message.provider).then(sendResponse).catch(() => sendResponse({ ok: false, reason: 'storage-error' })); return true; }
   if (message.type === 'touch-cache') { touchCache(message.postId).then(() => sendResponse({ ok: true })); return true; }
   if (message.type === 'verify-api-key') {
-    verifyApiKey(message.provider, message.apiKey).then(sendResponse).catch(error => sendResponse({ ok: false, reason: error.reason || 'network-error' }));
+    verifyApiKey(message.provider, message.apiKey, message.model).then(sendResponse).catch(error => sendResponse({ ok: false, reason: error.reason || 'network-error' }));
     return true;
   }
   if (message.type === 'get-usage') { getUsage().then(async usage => { await refreshActionIcon(); sendResponse(usage); }); return true; }
@@ -387,16 +395,16 @@ async function clearDecisionCache() {
   return { ok: true };
 }
 
-async function verifyApiKey(provider, apiKey) {
-  if (provider !== 'typesafe') return verifyApiKeyUnqueued(provider, apiKey);
+async function verifyApiKey(provider, apiKey, model) {
+  if (provider !== 'typesafe') return verifyApiKeyUnqueued(provider, apiKey, model);
   await new Promise(resolve => setTimeout(resolve, 0));
   if (inFlight.size) await Promise.all([...inFlight.values()].map(task => task.catch(() => undefined)));
   return enqueueApi(() => verifyApiKeyUnqueued(provider, apiKey), 0);
 }
 
-async function verifyApiKeyUnqueued(provider, apiKey) {
+async function verifyApiKeyUnqueued(provider, apiKey, model) {
   const key = typeof apiKey === 'string' ? apiKey.trim() : '';
-  if (!key) return { ok: false, reason: 'missing-key' };
+  if (!key && !KEYLESS_PROVIDERS.has(provider)) return { ok: false, reason: 'missing-key' };
   if (!verifyEndpoints[provider]) return { ok: false, reason: 'unsupported-provider' };
   if (provider === 'typesafe') {
     const budget = await getBudgetStatus(await getConfig());
@@ -404,13 +412,13 @@ async function verifyApiKeyUnqueued(provider, apiKey) {
   }
   let response;
   try {
-    const options = { headers: { Authorization: `Bearer ${key}` } };
-    if (provider === 'typesafe') {
+    const options = { headers: authHeaders(provider, key) };
+    if (provider === 'typesafe' || provider === 'ollama') {
       options.method = 'POST';
       options.headers['Content-Type'] = 'application/json';
-      options.body = JSON.stringify({ model: 'jev-latest', state: 'APIキー接続確認', questions: { connection: { type: 'noul', instructions: 'この接続確認に応答できるか？' } } });
+      options.body = JSON.stringify({ model: provider === 'ollama' ? (typeof model === 'string' && model.trim() ? model.trim() : OLLAMA_DEFAULT_MODEL) : 'jev-latest', state: 'APIキー接続確認', questions: { connection: { type: 'noul', instructions: 'この接続確認に応答できるか？' } } });
     }
-    options.signal = AbortSignal.timeout(10000);
+    options.signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS[provider] ?? 10000);
     response = await fetch(verifyEndpoints[provider], options);
   }
   catch { return { ok: false, reason: 'network-error' }; }
@@ -468,7 +476,7 @@ async function classify(text, postId, priority = 1, requestTiming) {
     const compatible = postId && await findCompatibleCached(postId, config, questions, config.decisionCacheLimitMb * 1024 * 1024, generation);
     if (compatible && !compatible._jevCachePartial) return compatible;
     const requestQuestions = compatible?._jevCachePartial ? Object.fromEntries(compatible._jevMissing.map(id => [id, questions[id]])) : questions;
-    const request = enqueueApi(() => classifyUncached(text, config, requestQuestions, requestedKeyGeneration, generation, requestedConfigGeneration, apiKey, startedAt), priority);
+    const request = enqueueApi(() => classifyUncached(text, config, requestQuestions, requestedKeyGeneration, generation, requestedConfigGeneration, apiKey, startedAt), priority, config.provider);
     const result = await request;
     if (compatible?._jevCachePartial && result?.answers) result.answers = { ...compatible.answers, ...result.answers };
     if (generation !== cacheGeneration) return { unknown: true, reason: 'cache-cleared' };
@@ -502,7 +510,7 @@ async function classifyUncached(text, config, questions, requestedKeyGeneration 
     : { state: text, model: config.model, questions };
   if (requestedKeyGeneration !== keyGeneration || requestedCacheGeneration !== cacheGeneration || requestedConfigGeneration !== configGeneration) return { unknown: true, reason: 'stale-request' };
   const requestStartedAt = performance.now();
-  const response = await fetch(endpoints[config.provider], { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
+  const response = await fetch(endpoints[config.provider], { method: 'POST', headers: { ...authHeaders(config.provider, apiKey), 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS[config.provider] ?? DEFAULT_REQUEST_TIMEOUT_MS) });
     if (!response.ok) throw Object.assign(new Error('API request failed'), { reason: 'http-error', status: response.status });
     const result = await response.json();
     const answers = config.provider === 'openrouter'
@@ -510,7 +518,7 @@ async function classifyUncached(text, config, questions, requestedKeyGeneration 
       : result?.answers;
     if (globalThis.JEV_DEV_TIMING) console.debug('[jev timing]', { preApiMs: Math.round(requestStartedAt - startedAt), apiMs: Math.round(performance.now() - requestStartedAt) });
     if (!result || typeof result !== 'object' || !result.answers || typeof result.answers !== 'object' || !validAnswers(answers, questions)) throw Object.assign(new Error('Invalid API response'), { reason: 'invalid-response' });
-    await recordUsage(result.usage);
+    if (!KEYLESS_PROVIDERS.has(config.provider)) await recordUsage(result.usage);
     actionError = false;
     return config.provider === 'openrouter' ? { ...result, answers } : result;
 }
@@ -566,6 +574,7 @@ function recordUsage(raw) {
   return usageQueue;
 }
 async function getBudgetStatus(config) {
+  if (KEYLESS_PROVIDERS.has(config.provider)) return null;
   const limits = configuredLimits(config);
   if (!Object.values(limits).some(Boolean)) return null;
   if (config.inputPricePerMillion === null) return 'cost-unavailable';
